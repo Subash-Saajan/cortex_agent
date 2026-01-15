@@ -32,3 +32,23 @@ output "ecs_service_name" {
   description = "ECS service name"
   value       = aws_ecs_service.backend.name
 }
+
+output "alb_dns_name" {
+  description = "ALB DNS name"
+  value       = aws_lb.backend.dns_name
+}
+
+output "alb_zone_id" {
+  description = "ALB Zone ID for Route53/Cloudflare"
+  value       = aws_lb.backend.zone_id
+}
+
+output "acm_certificate_arn" {
+  description = "ACM certificate ARN"
+  value       = aws_acm_certificate.backend.arn
+}
+
+output "acm_certificate_validation_options" {
+  description = "ACM certificate DNS validation records"
+  value       = aws_acm_certificate.backend.domain_validation_options
+}

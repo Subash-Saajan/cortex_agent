@@ -1,6 +1,30 @@
 # Cortex Agent - Project Status
 
-**Date:** January 15, 2026 | **Days Completed:** 1-6 | **Status:** On Track for Day 9 Submission
+**Date:** January 15, 2026 | **Days Completed:** 1-7 | **Status:** Backend Live, Moving to Vercel + ALB
+
+---
+
+## 🎯 Current Status Summary
+
+**What Works:**
+- ✅ Backend running on ECS with health check passing
+- ✅ All deployment blockers resolved (IAM, dependencies, pgvector)
+- ✅ Database configured with pgvector extension
+- ✅ LangGraph agent with Claude integration
+- ✅ Google OAuth, Gmail, Calendar APIs integrated
+- ✅ GitHub Actions CI/CD pipeline working
+
+**What's Next:**
+- 🔨 Add ALB to Terraform for HTTPS (required for Google OAuth)
+- 🔨 Deploy frontend to Vercel (free, automatic HTTPS)
+- 🔨 Configure custom domains via Cloudflare
+- 🔨 End-to-end testing
+- 🚀 Submit by January 22 (2 days early)
+
+**Architecture Decision:**
+Moving from S3+CloudFront → **Vercel** (frontend) + **ALB** (backend) for production-ready HTTPS everywhere.
+
+**Estimated Cost:** ~$3-5 for 2-3 day demo, then destroy infrastructure
 
 ---
 
@@ -10,11 +34,13 @@
 - ✅ VPC with public subnets across 2 AZs
 - ✅ ECS Fargate cluster with public IP assignment
 - ✅ RDS PostgreSQL (db.t3.micro, free tier eligible)
-- ✅ S3 + CloudFront for frontend hosting (HTTPS)
 - ✅ ECR repositories for Docker images
 - ✅ CloudWatch logging configured
 - ✅ GitHub Actions CI/CD pipeline for automated deployment
 - ✅ All code pushed to GitHub
+- ✅ Fixed IAM roles (separate execution role for ECR access)
+- ✅ Fixed all dependency conflicts (anthropic, langchain, pydantic, pgvector)
+- ✅ Backend successfully running on ECS
 
 **Infrastructure Details:**
 - CloudFront Domain: `d3ouv9vt88djdf.cloudfront.net`
@@ -78,33 +104,98 @@ Chat:
 
 ---
 
+## Recent Deployment Issues Fixed ✅
+
+### **All Deployment Blockers Resolved:**
+1. ✅ **ECR Permission Error** - Separated execution role from task role
+2. ✅ **pgvector Import Error** - Fixed import to use `pgvector.sqlalchemy.Vector`
+3. ✅ **LangChain Validation Error** - Updated anthropic from 0.25.0 → 0.41.0
+4. ✅ **Pydantic Version Conflict** - Updated pydantic 2.5.0 → 2.10.6, fastapi 0.104.1 → 0.115.6
+5. ✅ **Anthropic Version Conflict** - Updated to anthropic 0.41.0 (required by langchain-anthropic 0.3.1)
+6. ✅ **pgvector Extension Missing** - Added `CREATE EXTENSION IF NOT EXISTS vector` to startup
+7. ✅ **Backend Health Check** - Confirmed working: `{"status":"healthy","service":"cortex-agent-api"}`
+
+**Current Status:** Backend running successfully on ECS Fargate
+
+---
+
+## Architecture Decision: Adding ALB for Production
+
+### **Why We Need ALB:**
+- ❌ **Current Setup (ECS Public IP):** Works but limited
+  - No HTTPS (Google OAuth requires HTTPS)
+  - IP changes on task restart (breaks DNS)
+  - Port 8000 exposed (non-standard, firewall issues)
+  - Cannot scale horizontally
+
+- ✅ **With ALB:** Production-ready
+  - HTTPS with ACM certificate
+  - Stable DNS endpoint
+  - Standard ports (443)
+  - Auto-scaling support
+  - Health checks & failover
+
+### **Cost Analysis:**
+| Resource | Monthly Cost |
+|----------|--------------|
+| ECS Fargate (0.25 vCPU, 512MB) | ~$10 |
+| RDS db.t3.micro (free tier) | $0 (first 12 months) |
+| **ALB (new)** | **~$16-18** |
+| ECR + CloudWatch | ~$2 |
+| **Total** | **~$28-31/month** |
+
+**For Demo (2-3 days):** Only ~$3-5 total cost
+
+### **New Deployment Plan:**
+
+**Frontend:** Move from S3+CloudFront → **Vercel**
+- ✅ Free tier
+- ✅ Automatic HTTPS
+- ✅ Custom domain support (`cortex.subashsaajan.site`)
+- ✅ Zero configuration for Next.js
+- ✅ GitHub integration
+
+**Backend:** Add **Application Load Balancer**
+- HTTPS endpoint: `https://api.cortex.subashsaajan.site`
+- ACM certificate for SSL
+- Stable, production-ready
+
+---
+
 ## What's Next - Days 7-9
 
-### **Frontend Polish & Testing**
+### **Immediate Tasks:**
 
-1. **Frontend Integration:**
-   - Connect Next.js frontend to backend endpoints
-   - Implement Google OAuth login in frontend
-   - Add email and calendar views
-   - Integrate chat with agent
+1. **Add ALB to Terraform** (~30-45 min)
+   - ACM certificate for `api.cortex.subashsaajan.site`
+   - ALB with target group pointing to ECS
+   - HTTPS listener (port 443)
+   - Update security groups
+   - Update CORS in backend
 
-2. **Testing:**
-   - End-to-end testing (login → chat → email → calendar)
-   - Memory persistence testing
-   - Error handling and edge cases
-   - Performance testing
+2. **Deploy Frontend to Vercel** (~10-15 min)
+   - Connect GitHub repo to Vercel
+   - Configure environment variables
+   - Set custom domain: `cortex.subashsaajan.site`
+   - Update `NEXT_PUBLIC_BACKEND_URL` to ALB endpoint
 
-3. **Deployment:**
-   - Add GitHub Secrets (AWS credentials)
-   - Trigger GitHub Actions deployment
-   - Monitor ECS logs
-   - Verify all features working
+3. **Configure DNS in Cloudflare** (~10 min)
+   - CNAME: `cortex.subashsaajan.site` → Vercel
+   - CNAME: `api.cortex.subashsaajan.site` → ALB DNS
 
-4. **Polish:**
-   - UI/UX improvements
-   - Loading states
-   - Error messages
-   - Mobile responsiveness
+4. **Testing** (~30-60 min)
+   - End-to-end OAuth flow
+   - Chat functionality
+   - Gmail integration
+   - Calendar integration
+   - Memory persistence
+
+5. **Polish & Submit** (~2-3 hours)
+   - UI improvements
+   - Error handling
+   - Documentation
+   - Screenshots
+   - **Submit by January 22nd**
 
 ---
 
@@ -152,28 +243,55 @@ curl http://<ecs-public-ip>:8000/health
 
 ## Architecture Overview
 
+### **Current (Working but Limited):**
 ```
 ┌─────────────────────────────────────────┐
 │  CloudFront (HTTPS Frontend)            │
 │  https://d3ouv9vt88djdf.cloudfront.net  │
 └────────────────┬────────────────────────┘
-                 │
+                 │ HTTP (insecure)
                  ▼
 ┌─────────────────────────────────────────┐
 │  ECS Fargate Service (Backend)          │
 │  FastAPI + LangGraph + Claude           │
-│  Port 8000 (Public IP)                  │
+│  http://<public-ip>:8000                │
 └────────────────┬────────────────────────┘
                  │
                  ▼
 ┌──────────────────────────────────────────┐
 │  RDS PostgreSQL (cortexdb)               │
 │  cortex-agent-db.cafuw86ac9wv.us...     │
-│  Port 5432                               │
+└──────────────────────────────────────────┘
+```
+
+### **New Architecture (Production-Ready):**
+```
+┌─────────────────────────────────────────┐
+│  Vercel (Frontend + HTTPS)              │
+│  https://cortex.subashsaajan.site       │
+└────────────────┬────────────────────────┘
+                 │ HTTPS (secure)
+                 ▼
+┌─────────────────────────────────────────┐
+│  Application Load Balancer (HTTPS)      │
+│  https://api.cortex.subashsaajan.site   │
+│  ACM Certificate + Health Checks        │
+└────────────────┬────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────┐
+│  ECS Fargate Service (Backend)          │
+│  FastAPI + LangGraph + Claude           │
+│  Private subnet, port 8000              │
+└────────────────┬────────────────────────┘
+                 │
+                 ▼
+┌──────────────────────────────────────────┐
+│  RDS PostgreSQL (cortexdb)               │
+│  cortex-agent-db.cafuw86ac9wv.us...     │
 └──────────────────────────────────────────┘
 
 External:
-│
 ├─→ Google OAuth (Gmail + Calendar)
 ├─→ Claude API (3.5 Sonnet)
 └─→ ECR (Docker Images)

@@ -77,11 +77,13 @@ resource "aws_route_table_association" "public" {
 resource "aws_security_group" "ecs" {
   vpc_id = aws_vpc.main.id
 
+  # Allow traffic from ALB only
   ingress {
-    from_port   = 8000
-    to_port     = 8000
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    from_port       = 8000
+    to_port         = 8000
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+    description     = "Allow traffic from ALB"
   }
 
   egress {
@@ -286,9 +288,18 @@ resource "aws_ecs_service" "backend" {
     assign_public_ip = true
   }
 
+  load_balancer {
+    target_group_arn = aws_lb_target_group.backend.arn
+    container_name   = "cortex-agent-backend"
+    container_port   = 8000
+  }
+
   tags = {
     Name = "cortex-agent-service"
   }
 
-  depends_on = [aws_db_instance.db]
+  depends_on = [
+    aws_db_instance.db,
+    aws_lb_listener.https
+  ]
 }

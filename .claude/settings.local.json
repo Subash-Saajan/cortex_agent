@@ -10,7 +10,10 @@
       "Bash(aws cloudfront list-distributions:*)",
       "Bash(docker build:*)",
       "Bash(git branch:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(aws ecr describe-repositories:*)",
+      "Bash(terraform state list:*)",
+      "Bash(terraform state show:*)"
     ]
   }
 }

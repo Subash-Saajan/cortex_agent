@@ -1,15 +1,21 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import os
 from dotenv import load_dotenv
 from sqlalchemy import text
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from .db.database import engine, Base
 from .api.chat import router as chat_router
 from .api.auth import router as auth_router
 from .api.integrations import router as integrations_router
 
 load_dotenv()
+
+# Rate limiter
+limiter = Limiter(key_func=get_remote_address)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -23,12 +29,15 @@ async def lifespan(app: FastAPI):
     await engine.dispose()
 
 app = FastAPI(title="Cortex Agent API", lifespan=lifespan)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS configuration
 origins = [
-    "https://d3ouv9vt88djdf.cloudfront.net",
-    "http://localhost:3000",
-    "http://localhost:8000",
+    "https://cortex.subashsaajan.site",       # Vercel production
+    "https://d3ouv9vt88djdf.cloudfront.net",  # Old CloudFront (fallback)
+    "http://localhost:3000",                   # Local development
+    "http://localhost:8000",                   # Local backend
 ]
 
 app.add_middleware(
