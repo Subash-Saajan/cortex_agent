@@ -15,4 +15,4 @@ langchain-core==0.1.33
 pgvector==0.2.4
 psycopg2-binary==2.9.9
 cryptography==41.0.7
-pyjwt==2.8.1
+pyjwt==2.8.0
