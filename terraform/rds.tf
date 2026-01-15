@@ -10,7 +10,6 @@ resource "aws_db_subnet_group" "main" {
 resource "aws_db_instance" "db" {
   identifier           = "cortex-agent-db"
   engine               = "postgres"
-  engine_version       = "15.4"
   instance_class       = "db.t3.micro"
   allocated_storage    = 20
   db_name              = "cortexdb"

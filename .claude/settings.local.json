@@ -5,7 +5,9 @@
       "Bash(git remote add:*)",
       "Bash(terraform init:*)",
       "Bash(terraform plan:*)",
-      "Bash(terraform apply:*)"
+      "Bash(terraform apply:*)",
+      "Bash(terraform destroy:*)",
+      "Bash(aws cloudfront list-distributions:*)"
     ]
   }
 }
