@@ -234,7 +234,7 @@ resource "aws_ecs_task_definition" "backend" {
       environment = [
         {
           name  = "DATABASE_URL"
-          value = "postgresql://${aws_rds_cluster.db.master_username}:${var.db_password}@${aws_rds_cluster.db.endpoint}:5432/${aws_rds_cluster.db.database_name}"
+          value = "postgresql://${aws_db_instance.db.username}:${var.db_password}@${aws_db_instance.db.endpoint}:5432/${aws_db_instance.db.db_name}"
         },
         {
           name  = "GOOGLE_CLIENT_ID"
@@ -275,5 +275,5 @@ resource "aws_ecs_service" "backend" {
     Name = "cortex-agent-service"
   }
 
-  depends_on = [aws_rds_cluster_instance.db]
+  depends_on = [aws_db_instance.db]
 }

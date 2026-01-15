@@ -5,7 +5,7 @@ output "ecs_service_public_ip" {
 
 output "rds_endpoint" {
   description = "RDS endpoint"
-  value       = aws_rds_cluster.db.endpoint
+  value       = aws_db_instance.db.endpoint
 }
 
 output "cloudfront_domain" {
