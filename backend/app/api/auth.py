@@ -88,8 +88,8 @@ async def login():
 
     return LoginResponse(auth_url=auth_url)
 
-@router.post("/callback")
-async def callback(request: CallbackRequest, db: AsyncSession = Depends(get_db)):
+@router.get("/callback")
+async def callback(code: str = Query(...), db: AsyncSession = Depends(get_db)):
     """Handle Google OAuth callback"""
     if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
         raise HTTPException(status_code=500, detail="Google OAuth not configured")
@@ -115,7 +115,7 @@ async def callback(request: CallbackRequest, db: AsyncSession = Depends(get_db))
         flow.redirect_uri = GOOGLE_REDIRECT_URI
 
         # Get token from authorization code
-        flow.fetch_token(code=request.code)
+        flow.fetch_token(code=code)
         credentials = flow.credentials
 
         # Get user info
