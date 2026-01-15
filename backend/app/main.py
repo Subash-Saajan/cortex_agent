@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import os
 from dotenv import load_dotenv
+from sqlalchemy import text
 from .db.database import engine, Base
 from .api.chat import router as chat_router
 from .api.auth import router as auth_router
@@ -14,6 +15,8 @@ load_dotenv()
 async def lifespan(app: FastAPI):
     # Startup
     async with engine.begin() as conn:
+        # Enable pgvector extension
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
     yield
     # Shutdown
