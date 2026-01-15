@@ -34,3 +34,9 @@ variable "jwt_secret" {
   sensitive   = true
   default     = "your-secret-key"
 }
+
+variable "google_redirect_uri" {
+  description = "Google OAuth Redirect URI"
+  type        = string
+  default     = "https://cortex.subashsaajan.site/api/auth/callback"
+}

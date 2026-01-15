@@ -72,19 +72,17 @@ async def login():
         "https://www.googleapis.com/auth/calendar"
     ]
 
-    flow = Flow.from_client_secrets_info(
-        {
-            "installed": {
-                "client_id": GOOGLE_CLIENT_ID,
-                "client_secret": GOOGLE_CLIENT_SECRET,
-                "redirect_uris": [GOOGLE_REDIRECT_URI],
-                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                "token_uri": "https://oauth2.googleapis.com/token"
-            }
-        },
-        scopes=scopes,
-        redirect_uri=GOOGLE_REDIRECT_URI
-    )
+    client_config = {
+        "installed": {
+            "client_id": GOOGLE_CLIENT_ID,
+            "client_secret": GOOGLE_CLIENT_SECRET,
+            "redirect_uris": [GOOGLE_REDIRECT_URI],
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token"
+        }
+    }
+    flow = Flow.from_client_config(client_config, scopes=scopes)
+    flow.redirect_uri = GOOGLE_REDIRECT_URI
 
     auth_url, state = flow.authorization_url(prompt="consent")
 
@@ -98,25 +96,23 @@ async def callback(request: CallbackRequest, db: AsyncSession = Depends(get_db))
 
     try:
         # Create OAuth 2.0 flow
-        flow = Flow.from_client_secrets_info(
-            {
-                "installed": {
-                    "client_id": GOOGLE_CLIENT_ID,
-                    "client_secret": GOOGLE_CLIENT_SECRET,
-                    "redirect_uris": [GOOGLE_REDIRECT_URI],
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token"
-                }
-            },
-            scopes=[
-                "https://www.googleapis.com/auth/userinfo.email",
-                "https://www.googleapis.com/auth/userinfo.profile",
-                "https://www.googleapis.com/auth/gmail.readonly",
-                "https://www.googleapis.com/auth/gmail.send",
-                "https://www.googleapis.com/auth/calendar"
-            ],
-            redirect_uri=GOOGLE_REDIRECT_URI
-        )
+        client_config = {
+            "installed": {
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "redirect_uris": [GOOGLE_REDIRECT_URI],
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token"
+            }
+        }
+        flow = Flow.from_client_config(client_config, scopes=[
+            "https://www.googleapis.com/auth/userinfo.email",
+            "https://www.googleapis.com/auth/userinfo.profile",
+            "https://www.googleapis.com/auth/gmail.readonly",
+            "https://www.googleapis.com/auth/gmail.send",
+            "https://www.googleapis.com/auth/calendar"
+        ])
+        flow.redirect_uri = GOOGLE_REDIRECT_URI
 
         # Get token from authorization code
         flow.fetch_token(code=request.code)

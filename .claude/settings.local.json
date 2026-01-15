@@ -13,7 +13,14 @@
       "Bash(git push:*)",
       "Bash(aws ecr describe-repositories:*)",
       "Bash(terraform state list:*)",
-      "Bash(terraform state show:*)"
+      "Bash(terraform state show:*)",
+      "Bash(terraform output:*)",
+      "Bash(python -m json.tool:*)",
+      "Bash(aws acm describe-certificate:*)",
+      "Bash(terraform console:*)",
+      "Bash(dig:*)",
+      "Bash(curl:*)",
+      "Bash(terraform refresh:*)"
     ]
   }
 }

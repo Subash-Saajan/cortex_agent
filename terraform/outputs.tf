@@ -52,3 +52,7 @@ output "acm_certificate_validation_options" {
   description = "ACM certificate DNS validation records"
   value       = aws_acm_certificate.backend.domain_validation_options
 }
+output "s3_bucket_name" {
+  description = "S3 bucket name for frontend"
+  value       = aws_s3_bucket.frontend.id
+}

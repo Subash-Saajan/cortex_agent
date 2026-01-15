@@ -45,6 +45,13 @@ resource "aws_s3_bucket_policy" "frontend" {
   })
 }
 
+# ACM Certificate for frontend custom domain (must be in us-east-1 for CloudFront)
+data "aws_acm_certificate" "frontend" {
+  domain   = "cortex.subashsaajan.site"
+  statuses = ["ISSUED"]
+  provider = aws
+}
+
 resource "aws_cloudfront_distribution" "frontend" {
   origin {
     domain_name = aws_s3_bucket.frontend.bucket_regional_domain_name
@@ -58,6 +65,8 @@ resource "aws_cloudfront_distribution" "frontend" {
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"
+  
+  aliases = ["cortex.subashsaajan.site"]
 
   default_cache_behavior {
     allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
@@ -87,7 +96,9 @@ resource "aws_cloudfront_distribution" "frontend" {
   }
 
   viewer_certificate {
-    cloudfront_default_certificate = true
+    acm_certificate_arn      = data.aws_acm_certificate.frontend.arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
   }
 
   tags = {
