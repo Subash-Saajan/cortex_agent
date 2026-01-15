@@ -1,0 +1,6 @@
+aws_region          = "us-east-1"
+db_password          = "SecurePassword123!"
+google_client_id     = "your-client-id.apps.googleusercontent.com"
+google_client_secret = "your-client-secret"
+claude_api_key       = "sk-your-api-key"
+jwt_secret           = "your-jwt-secret-key"
