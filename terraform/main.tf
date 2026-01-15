@@ -157,6 +157,29 @@ resource "aws_cloudwatch_log_group" "ecs" {
   }
 }
 
+# IAM Role for ECS Task Execution
+resource "aws_iam_role" "ecs_execution_role" {
+  name = "cortex-agent-ecs-execution-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_execution_role_policy" {
+  role       = aws_iam_role.ecs_execution_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
 # IAM Role for ECS Task
 resource "aws_iam_role" "ecs_task_role" {
   name = "cortex-agent-ecs-task-role"
@@ -185,14 +208,6 @@ resource "aws_iam_role_policy" "ecs_task_policy" {
       {
         Effect = "Allow"
         Action = [
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
-        ]
-        Resource = "${aws_cloudwatch_log_group.ecs.arn}:*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
           "secretsmanager:GetSecretValue"
         ]
         Resource = "*"
@@ -208,7 +223,7 @@ resource "aws_ecs_task_definition" "backend" {
   requires_compatibilities = ["FARGATE"]
   cpu                      = "256"
   memory                   = "512"
-  execution_role_arn       = aws_iam_role.ecs_task_role.arn
+  execution_role_arn       = aws_iam_role.ecs_execution_role.arn
   task_role_arn            = aws_iam_role.ecs_task_role.arn
 
   container_definitions = jsonencode([
@@ -234,7 +249,7 @@ resource "aws_ecs_task_definition" "backend" {
       environment = [
         {
           name  = "DATABASE_URL"
-          value = "postgresql://${aws_db_instance.db.username}:${var.db_password}@${aws_db_instance.db.endpoint}:5432/${aws_db_instance.db.db_name}"
+          value = "postgresql://${aws_db_instance.db.username}:${var.db_password}@${aws_db_instance.db.endpoint}/${aws_db_instance.db.db_name}"
         },
         {
           name  = "GOOGLE_CLIENT_ID"
