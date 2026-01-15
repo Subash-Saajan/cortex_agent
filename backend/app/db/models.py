@@ -1,5 +1,6 @@
 from sqlalchemy import Column, String, Text, DateTime, Integer, Float, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID, VECTOR
+from sqlalchemy.dialects.postgresql import UUID
+from pgvector.sqlalchemy import Vector
 from datetime import datetime
 import uuid
 from .database import Base
@@ -40,5 +41,5 @@ class MemoryEmbedding(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     memory_fact_id = Column(UUID(as_uuid=True), ForeignKey("memory_facts.id"), nullable=False)
-    embedding = Column(VECTOR(1536), nullable=False)  # Claude embeddings are 1536 dims
+    embedding = Column(Vector(1536), nullable=False)  # Claude embeddings are 1536 dims
     created_at = Column(DateTime, default=datetime.utcnow)
