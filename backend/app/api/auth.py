@@ -120,15 +120,11 @@ async def callback(code: str = Query(...), db: AsyncSession = Depends(get_db)):
         flow.fetch_token(code=code)
         credentials = flow.credentials
 
-        # Get user info
-        from google.oauth2.service_account import Credentials as ServiceAccountCredentials
-        from googleapiclient.discovery import build
-
-        service = build("oauth2", "v1", credentials=credentials)
-        user_info = service.userinfo().get().execute()
+        # Get user info from id_token
+        user_info = verify_oauth2_token(credentials.id_token, GOOGLE_CLIENT_ID)
 
         email = user_info.get("email")
-        google_id = user_info.get("id")
+        google_id = user_info.get("sub")
         name = user_info.get("name")
 
         # Get or create user
