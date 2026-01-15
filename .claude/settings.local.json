@@ -7,7 +7,10 @@
       "Bash(terraform plan:*)",
       "Bash(terraform apply:*)",
       "Bash(terraform destroy:*)",
-      "Bash(aws cloudfront list-distributions:*)"
+      "Bash(aws cloudfront list-distributions:*)",
+      "Bash(docker build:*)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)"
     ]
   }
 }

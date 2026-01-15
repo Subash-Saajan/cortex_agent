@@ -1,15 +1,27 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 import os
 from dotenv import load_dotenv
+from .db.database import engine, Base
+from .api.chat import router as chat_router
 
 load_dotenv()
 
-app = FastAPI(title="Cortex Agent API")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+    # Shutdown
+    await engine.dispose()
+
+app = FastAPI(title="Cortex Agent API", lifespan=lifespan)
 
 # CORS configuration
 origins = [
-    "https://your-cloudfront-domain.cloudfront.net",
+    "https://d3ouv9vt88djdf.cloudfront.net",
     "http://localhost:3000",
     "http://localhost:8000",
 ]
@@ -22,18 +34,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include routers
+app.include_router(chat_router, prefix="/api", tags=["chat"])
+
 @app.get("/health")
 async def health():
-    return {"status": "healthy"}
-
-@app.post("/api/chat")
-async def chat(message: dict):
-    """Basic chat endpoint for Day 1"""
-    user_message = message.get("message", "")
-    return {
-        "response": f"Echo: {user_message}",
-        "status": "ok"
-    }
+    return {"status": "healthy", "service": "cortex-agent-api"}
 
 if __name__ == "__main__":
     import uvicorn
