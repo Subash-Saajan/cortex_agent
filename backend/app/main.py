@@ -5,6 +5,8 @@ import os
 from dotenv import load_dotenv
 from .db.database import engine, Base
 from .api.chat import router as chat_router
+from .api.auth import router as auth_router
+from .api.integrations import router as integrations_router
 
 load_dotenv()
 
@@ -36,6 +38,8 @@ app.add_middleware(
 
 # Include routers
 app.include_router(chat_router, prefix="/api", tags=["chat"])
+app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
+app.include_router(integrations_router, prefix="/api", tags=["integrations"])
 
 @app.get("/health")
 async def health():
