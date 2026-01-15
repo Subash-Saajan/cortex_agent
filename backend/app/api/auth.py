@@ -65,6 +65,7 @@ async def login():
 
     # Create OAuth 2.0 flow
     scopes = [
+        "openid",
         "https://www.googleapis.com/auth/userinfo.email",
         "https://www.googleapis.com/auth/userinfo.profile",
         "https://www.googleapis.com/auth/gmail.readonly",
@@ -106,6 +107,7 @@ async def callback(code: str = Query(...), db: AsyncSession = Depends(get_db)):
             }
         }
         flow = Flow.from_client_config(client_config, scopes=[
+            "openid",
             "https://www.googleapis.com/auth/userinfo.email",
             "https://www.googleapis.com/auth/userinfo.profile",
             "https://www.googleapis.com/auth/gmail.readonly",
