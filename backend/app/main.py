@@ -34,9 +34,10 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS configuration
 origins = [
-    "https://cortex.subashsaajan.site",       # Vercel production
-    "https://d3ouv9vt88djdf.cloudfront.net",  # Old CloudFront (fallback)
-    "http://localhost:3000",                   # Local development
+    "https://cortex.subashsaajan.site",       # Frontend
+    "https://api.cortex.subashsaajan.site",   # API
+    "https://d3ouv9vt88djdf.cloudfront.net",  # CloudFront (fallback)
+    "http://localhost:3000",                   # Local frontend
     "http://localhost:8000",                   # Local backend
 ]
 
