@@ -8,9 +8,10 @@ env:
   AWS_REGION: us-east-1
   AWS_ACCOUNT_ID: 045230654519
   ECR_BACKEND_REPO: cortex-agent-backend
-  ECR_FRONTEND_REPO: cortex-agent-frontend
   ECS_CLUSTER: cortex-agent-cluster
   ECS_SERVICE: cortex-agent-service
+  S3_BUCKET: cortex-agent-frontend-045230654519
+  CLOUDFRONT_DIST_ID: E3542HOBM2OPAR
 
 jobs:
   build-and-deploy:
@@ -41,16 +42,21 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_BACKEND_REPO:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_BACKEND_REPO:latest
 
-      - name: Build, tag, and push frontend image to ECR
+      - name: Build frontend for static export
         env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
           NEXT_PUBLIC_BACKEND_URL: ${{ secrets.FRONTEND_BACKEND_URL }}
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_FRONTEND_REPO:$IMAGE_TAG ./frontend
-          docker tag $ECR_REGISTRY/$ECR_FRONTEND_REPO:$IMAGE_TAG $ECR_REGISTRY/$ECR_FRONTEND_REPO:latest
-          docker push $ECR_REGISTRY/$ECR_FRONTEND_REPO:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_FRONTEND_REPO:latest
+          cd frontend
+          npm install
+          npm run build
+
+      - name: Deploy frontend to S3
+        run: |
+          aws s3 sync ./frontend/out/ s3://${{ env.S3_BUCKET }}/ --delete --cache-control "max-age=31536000"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${{ env.CLOUDFRONT_DIST_ID }} --paths "/*"
 
       - name: Update ECS service
         run: |
