@@ -2,18 +2,19 @@ import os
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from anthropic import Anthropic
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.messages import HumanMessage
 from ..db.models import MemoryFact, MemoryEmbedding
 import json
 
-client = Anthropic()
+llm = ChatGoogleGenerativeAI(model="gemini-1.5-pro", google_api_key=os.getenv("GOOGLE_API_KEY"))
 
 class MemoryService:
     """Service for managing user memory with embeddings"""
 
     @staticmethod
     async def extract_facts(user_id: str, message: str, db: AsyncSession) -> List[dict]:
-        """Extract facts from user message using Claude"""
+        """Extract facts from user message using Gemini"""
 
         prompt = f"""Extract key facts, preferences, and important information from this message.
 Only extract if the information is about the user's preferences, habits, or important facts.
@@ -27,28 +28,19 @@ Return as JSON array with objects containing:
 If no facts to extract, return empty array [].
 Only return JSON, no other text."""
 
-        response = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
-            max_tokens=1024,
-            messages=[{"role": "user", "content": prompt}]
-        )
+        response = llm.invoke([HumanMessage(content=prompt)])
 
         try:
-            facts = json.loads(response.content[0].text)
+            facts = json.loads(response.content)
             return facts if isinstance(facts, list) else []
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, AttributeError):
             return []
 
     @staticmethod
     async def store_fact(user_id: str, fact: str, category: str, db: AsyncSession) -> MemoryFact:
         """Store a fact with embedding"""
 
-        # Get embedding for the fact
-        embedding_response = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
-            max_tokens=1024,
-            messages=[{"role": "user", "content": f"Convert this to a searchable vector representation: {fact}"}]
-        )
+        embedding_response = llm.invoke([HumanMessage(content=f"Convert this to a searchable vector representation: {fact}")])
 
         # Create memory fact
         memory_fact = MemoryFact(
