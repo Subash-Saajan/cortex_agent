@@ -25,7 +25,37 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Initializing database and pgvector...")
     async with engine.begin() as conn:
+        # Enable pgvector extension
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        
+        # --- MIGRATIONS ---
+        # 1. Ensure metadata_json exists in memory_facts
+        try:
+            await conn.execute(text("ALTER TABLE memory_facts ADD COLUMN IF NOT EXISTS metadata_json TEXT"))
+            logger.info("Checked memory_facts.metadata_json")
+        except Exception as e:
+            logger.error(f"Migration error (metadata_json): {e}")
+
+        # 2. Add updated_at if missing
+        try:
+            await conn.execute(text("ALTER TABLE memory_facts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"))
+        except Exception as e:
+            logger.error(f"Migration error (updated_at): {e}")
+
+        # 3. Handle Vector dimension change (from 1536 to 768)
+        try:
+            # Drop and recreate embeddings table if dimension is wrong to avoid mismatches
+            # In a real prod app we'd be more careful, but for this demo it's best to be clean.
+            result = await conn.execute(text("SELECT atttypmod FROM pg_attribute WHERE attrelid = 'memory_embeddings'::regclass AND attname = 'embedding'"))
+            row = result.fetchone()
+            if row and row[0] != 768:
+                logger.info(f"Vector dimension mismatch (found {row[0]}, expected 768). Recreating table...")
+                await conn.execute(text("DROP TABLE IF EXISTS memory_embeddings CASCADE"))
+        except Exception:
+            # Table might not exist yet, create_all will handle it
+            pass
+
+        # Sync all models
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database initialized.")
     yield
@@ -56,7 +86,6 @@ app.add_middleware(
 @app.middleware("http")
 async def error_handling_middleware(request: Request, call_next):
     try:
-        logger.info(f"Request: {request.method} {request.url.path}")
         response = await call_next(request)
         return response
     except Exception as e:
@@ -90,5 +119,4 @@ async def health():
 
 if __name__ == "__main__":
     import uvicorn
-    # Use proxy_headers if behind ALB
     uvicorn.run(app, host="0.0.0.0", port=8000, proxy_headers=True, forwarded_allow_ips="*")
