@@ -77,8 +77,33 @@ async def chat(request: Request, chat_request: ChatRequest, db: AsyncSession = D
         
     except Exception as e:
         import traceback
+        import os
+        import google.generativeai as genai
+        
         print(f"Agent Error: {str(e)}")
         print(traceback.format_exc())
+        
+        # DEBUG: List available models if it's a 404/not found error
+        if "404" in str(e) or "not found" in str(e).lower():
+            try:
+                print("--- DEBUG: CHECKING AVAILABLE MODELS ---")
+                api_key = os.getenv("GOOGLE_API_KEY")
+                if api_key:
+                    genai.configure(api_key=api_key)
+                    models = genai.list_models()
+                    available_models = []
+                    for m in models:
+                        model_info = f"{m.name} (Methods: {m.supported_generation_methods})"
+                        print(f"Found model: {model_info}")
+                        if "generateContent" in m.supported_generation_methods:
+                            available_models.append(m.name)
+                    print(f"Models supporting generateContent: {available_models}")
+                else:
+                    print("GOOGLE_API_KEY not found in env")
+                print("--- END DEBUG ---")
+            except Exception as model_err:
+                print(f"Failed to list models: {model_err}")
+                
         raise HTTPException(status_code=500, detail=f"Agent Error: {str(e)}")
 
 @router.get("/chat/history/{user_id}")
