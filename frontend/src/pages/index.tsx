@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
 import { useRouter } from 'next/router'
 
@@ -16,6 +16,16 @@ export default function Home() {
   const [showDraft, setShowDraft] = useState(false)
   const [userEmail, setUserEmail] = useState('')
   const [userName, setUserName] = useState('')
+
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages, loading])
 
   useEffect(() => {
     // Check for auth token in URL (OAuth callback)
@@ -45,7 +55,7 @@ export default function Home() {
             setUserEmail(data.email || '')
             setUserName(data.name || '')
           })
-          .catch(() => {})
+          .catch(() => { })
       }
     }
   }, [router])
@@ -83,18 +93,23 @@ export default function Home() {
         message: userMessage,
         user_id: userId
       })
-      
-      // Check if response contains a draft email
+
       const responseText = response.data.response
-      if (responseText.includes('Subject:') || responseText.toLowerCase().includes('draft email')) {
+
+      // Check if response contains a draft email format
+      if (responseText.includes('Subject:') && (responseText.includes('Body:') || responseText.length > 50)) {
         setDraftEmail(responseText)
         setShowDraft(true)
-        setMessages(prev => [...prev, { role: 'assistant', content: "Here's a draft email. Review and click Send to confirm, or edit below.", draft: true }])
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: "I've drafted that email for you. You can review and edit it below.",
+          draft: true
+        }])
       } else {
         setMessages(prev => [...prev, { role: 'assistant', content: responseText }])
       }
     } catch (err: any) {
-      const errorMsg = err.response?.data?.detail || 'Error: Could not reach backend'
+      const errorMsg = err.response?.data?.detail || 'I encountered an error connecting to the brain. Please try again.'
       setError(errorMsg)
       setMessages(prev => [...prev, { role: 'assistant', content: errorMsg }])
     } finally {
@@ -104,21 +119,34 @@ export default function Home() {
 
   const handleSendDraft = async () => {
     if (!draftEmail.trim() || !userId) return
-    
+
     try {
       setLoading(true)
-      const response = await axios.post(`${BACKEND_URL}/api/gmail/send`, {
+
+      // Extract data from draft
+      const toMatch = draftEmail.match(/To:\s*([^\n]+)/i) || draftEmail.match(/to\s+([^\s]+@[^\s]+)/i)
+      const subMatch = draftEmail.match(/Subject:\s*([^\n]+)/i)
+
+      const to = toMatch ? toMatch[1].trim() : 'recipient@example.com'
+      const subject = subMatch ? subMatch[1].trim() : 'No Subject'
+      const body = draftEmail
+        .replace(/To:.+/i, '')
+        .replace(/Subject:.+/i, '')
+        .replace(/Body:.+/i, '')
+        .trim()
+
+      await axios.post(`${BACKEND_URL}/api/gmail/send`, {
         user_id: userId,
-        to: draftEmail.match(/to\s+([^\s]+@[^\s]+)/)?.[1] || 'recipient@example.com',
-        subject: draftEmail.match(/Subject:\s*(.+)/)?.[1] || 'No Subject',
-        body: draftEmail.replace(/Subject:.+/i, '').trim()
+        to: to,
+        subject: subject,
+        body: body
       })
-      
+
       setShowDraft(false)
       setDraftEmail('')
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Email sent successfully!' }])
+      setMessages(prev => [...prev, { role: 'assistant', content: `Success! I've sent the email to ${to}.` }])
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to send email')
+      setError(err.response?.data?.detail || 'Failed to send email. Check your connection.')
     } finally {
       setLoading(false)
     }
@@ -126,224 +154,160 @@ export default function Home() {
 
   if (!isLoggedIn) {
     return (
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '100vh',
-        fontFamily: 'system-ui',
-        backgroundColor: '#f5f5f5'
-      }}>
+      <div className="bg-mesh">
         <div style={{
-          backgroundColor: 'white',
-          padding: '40px',
-          borderRadius: '12px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-          textAlign: 'center'
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100vh',
+          padding: '20px'
         }}>
-          <h1 style={{ marginBottom: '10px' }}>Cortex Agent</h1>
-          <p style={{ color: '#666', marginBottom: '30px' }}>
-            Your personal AI assistant for email, calendar, and tasks
-          </p>
-          <button
-            onClick={handleLogin}
-            style={{
-              padding: '12px 24px',
-              fontSize: '16px',
-              backgroundColor: '#4285f4',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontWeight: 'bold'
-            }}
-          >
-            Sign in with Google
-          </button>
-          {error && <p style={{ color: 'red', marginTop: '10px' }}>{error}</p>}
+          <div className="glass-card" style={{
+            padding: '60px 40px',
+            maxWidth: '500px',
+            width: '100%',
+            textAlign: 'center'
+          }}>
+            <h1 className="logo-text" style={{ fontSize: '3rem', marginBottom: '16px' }}>Cortex</h1>
+            <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem', marginBottom: '40px', lineHeight: '1.6' }}>
+              Your intelligent Chief of Staff. Seamlessly managing your communications, schedule, and personal knowledge.
+            </p>
+            <button
+              onClick={handleLogin}
+              className="btn-send"
+              style={{
+                width: '100%',
+                padding: '16px',
+                fontSize: '1.1rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '12px'
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" />
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 12-4.53z" />
+              </svg>
+              Continue with Google
+            </button>
+            {error && <p style={{ color: '#ef4444', marginTop: '20px', fontSize: '0.9rem' }}>{error}</p>}
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div style={{
-      maxWidth: '900px',
-      margin: '0 auto',
-      padding: '20px',
-      fontFamily: 'system-ui',
-      height: '100vh',
-      display: 'flex',
-      flexDirection: 'column'
-    }}>
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '20px',
-        borderBottom: '1px solid #eee',
-        paddingBottom: '15px'
-      }}>
-        <div>
-          <h1 style={{ margin: 0 }}>Cortex Agent</h1>
-          {userName && <p style={{ margin: '5px 0 0 0', color: '#666', fontSize: '14px' }}>{userName} ({userEmail})</p>}
-        </div>
-        <button
-          onClick={handleLogout}
-          style={{
-            padding: '8px 16px',
-            fontSize: '14px',
-            backgroundColor: '#f0f0f0',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
-          Logout
-        </button>
-      </div>
-
-      <div style={{
-        flex: 1,
-        border: '1px solid #ddd',
-        borderRadius: '8px',
-        padding: '16px',
-        marginBottom: '16px',
-        overflowY: 'auto',
-        backgroundColor: '#fafafa'
-      }}>
-        {messages.length === 0 && (
-          <p style={{ color: '#999', textAlign: 'center', marginTop: '50px' }}>
-            Start a conversation with your AI assistant
-          </p>
-        )}
-        {messages.map((msg, idx) => (
-          <div key={idx} style={{
-            marginBottom: '16px',
-            padding: '12px',
-            borderRadius: '6px',
-            backgroundColor: msg.role === 'user' ? '#e3f2fd' : '#f0f4f8',
-            marginLeft: msg.role === 'user' ? '40px' : '0',
-            marginRight: msg.role === 'user' ? '0' : '40px'
-          }}>
-            <strong style={{ color: msg.role === 'user' ? '#1976d2' : '#424242' }}>
-              {msg.role === 'user' ? 'You' : 'Agent'}
-            </strong>
-            <p style={{ margin: '8px 0 0 0', whiteSpace: 'pre-wrap' }}>{msg.content}</p>
-          </div>
-        ))}
-        {loading && (
-          <div style={{ color: '#999', fontStyle: 'italic' }}>
-            Agent is thinking...
-          </div>
-        )}
-        
-        {/* Draft Email UI */}
-        {showDraft && (
-          <div style={{
-            marginTop: '20px',
-            padding: '16px',
-            backgroundColor: '#fff',
-            border: '2px solid #0066cc',
-            borderRadius: '8px'
-          }}>
-            <h3 style={{ margin: '0 0 12px 0', color: '#0066cc' }}>Draft Email</h3>
-            <textarea
-              value={draftEmail}
-              onChange={(e) => setDraftEmail(e.target.value)}
-              style={{
-                width: '100%',
-                minHeight: '150px',
-                padding: '12px',
-                fontSize: '14px',
-                fontFamily: 'monospace',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                resize: 'vertical'
-              }}
-            />
-            <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
-              <button
-                onClick={handleSendDraft}
-                disabled={loading}
-                style={{
-                  padding: '10px 24px',
-                  fontSize: '14px',
-                  backgroundColor: loading ? '#ccc' : '#0066cc',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  fontWeight: 'bold'
-                }}
-              >
-                {loading ? 'Sending...' : 'Send Email'}
-              </button>
-              <button
-                onClick={() => { setShowDraft(false); setDraftEmail(''); }}
-                style={{
-                  padding: '10px 16px',
-                  fontSize: '14px',
-                  backgroundColor: '#f0f0f0',
-                  border: '1px solid #ccc',
-                  borderRadius: '6px',
-                  cursor: 'pointer'
-                }}
-              >
-                Cancel
-              </button>
+    <div className="bg-mesh">
+      <div className="chat-container">
+        <header className="header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>C</div>
+            <div>
+              <h2 className="logo-text" style={{ fontSize: '1.5rem' }}>Cortex</h2>
+              {userName && <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Connected as {userName}</p>}
             </div>
           </div>
+          <button onClick={handleLogout} className="btn-secondary">Logout</button>
+        </header>
+
+        <main className="messages-area glass-card">
+          {messages.length === 0 && (
+            <div style={{ textAlign: 'center', marginTop: '100px', opacity: 0.5 }}>
+              <div style={{ fontSize: '3rem', marginBottom: '16px' }}>👋</div>
+              <h3>How can I help you today?</h3>
+              <p style={{ marginTop: '8px' }}>Ask me about your emails, calendar, or to remember something.</p>
+            </div>
+          )}
+          {messages.map((msg, idx) => (
+            <div
+              key={idx}
+              className={`message-bubble ${msg.role === 'user' ? 'message-user' : 'message-agent'}`}
+            >
+              <div style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '4px', opacity: 0.8 }}>
+                {msg.role === 'user' ? 'YOU' : 'CORTEX'}
+              </div>
+              <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
+            </div>
+          ))}
+          {loading && (
+            <div className="typing-indicator">
+              <div className="dot"></div>
+              <div className="dot"></div>
+              <div className="dot"></div>
+            </div>
+          )}
+
+          {showDraft && (
+            <div className="draft-card">
+              <div className="draft-header">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+                Email Draft
+              </div>
+              <textarea
+                className="draft-textarea"
+                value={draftEmail}
+                onChange={(e) => setDraftEmail(e.target.value)}
+              />
+              <div className="draft-actions">
+                <button
+                  onClick={handleSendDraft}
+                  disabled={loading}
+                  className="btn-primary"
+                  style={{ flex: 1 }}
+                >
+                  {loading ? 'Sending...' : 'Send Message'}
+                </button>
+                <button
+                  onClick={() => { setShowDraft(false); setDraftEmail(''); }}
+                  className="btn-secondary"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </main>
+
+        {error && (
+          <div style={{ margin: '12px 0', padding: '12px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '12px', color: '#ef4444', fontSize: '0.9rem', textAlign: 'center' }}>
+            {error}
+          </div>
         )}
+
+        <footer className="input-area">
+          <input
+            className="input-field"
+            type="text"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && !loading && handleSendMessage()}
+            placeholder="Type your message..."
+            disabled={loading}
+          />
+          <button
+            className="btn-send"
+            onClick={handleSendMessage}
+            disabled={loading || !message.trim()}
+          >
+            {loading ? '...' : 'Send'}
+          </button>
+        </footer>
       </div>
 
-      {error && (
-        <div style={{
-          padding: '12px',
-          backgroundColor: '#ffebee',
-          color: '#c62828',
-          borderRadius: '4px',
-          marginBottom: '12px'
-        }}>
-          {error}
-        </div>
-      )}
-
-      <div style={{ display: 'flex', gap: '8px' }}>
-        <input
-          type="text"
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && !loading && handleSendMessage()}
-          placeholder="Ask me anything..."
-          disabled={loading}
-          style={{
-            flex: 1,
-            padding: '12px',
-            fontSize: '14px',
-            border: '1px solid #ddd',
-            borderRadius: '6px',
-            fontFamily: 'system-ui'
-          }}
-        />
-        <button
-          onClick={handleSendMessage}
-          disabled={loading || !message.trim()}
-          style={{
-            padding: '12px 24px',
-            fontSize: '14px',
-            backgroundColor: loading || !message.trim() ? '#ccc' : '#0066cc',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: loading || !message.trim() ? 'not-allowed' : 'pointer',
-            fontWeight: 'bold'
-          }}
-        >
-          {loading ? 'Sending...' : 'Send'}
-        </button>
-      </div>
+      <style jsx global>{`
+        body {
+          overflow: hidden;
+        }
+      `}</style>
     </div>
   )
 }

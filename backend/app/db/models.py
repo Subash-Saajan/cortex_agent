@@ -43,5 +43,5 @@ class MemoryEmbedding(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     memory_fact_id = Column(UUID(as_uuid=True), ForeignKey("memory_facts.id"), nullable=False)
-    embedding = Column(Vector(1536), nullable=False)  # Claude embeddings are 1536 dims
+    embedding = Column(Vector(768), nullable=False)  # Google embedding-001 uses 768 dims
     created_at = Column(DateTime, default=datetime.utcnow)
