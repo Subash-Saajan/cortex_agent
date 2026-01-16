@@ -40,3 +40,9 @@ variable "google_redirect_uri" {
   type        = string
   default     = "https://cortex.subashsaajan.site/api/auth/callback"
 }
+
+variable "google_api_key" {
+  description = "Google Gemini API Key"
+  type        = string
+  sensitive   = true
+}

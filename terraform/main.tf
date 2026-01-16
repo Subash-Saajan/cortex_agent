@@ -57,8 +57,8 @@ resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
 
   route {
-    cidr_block      = "0.0.0.0/0"
-    gateway_id      = aws_internet_gateway.main.id
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
   }
 
   tags = {
@@ -249,31 +249,31 @@ resource "aws_ecs_task_definition" "backend" {
         }
       }
       environment = [
-      {
-        name  = "DATABASE_URL"
-        value = "postgresql://${aws_db_instance.db.username}:${var.db_password}@${aws_db_instance.db.endpoint}/${aws_db_instance.db.db_name}"
-      },
-      {
-        name  = "GOOGLE_CLIENT_ID"
-        value = var.google_client_id
-      },
-      {
-        name  = "GOOGLE_CLIENT_SECRET"
-        value = var.google_client_secret
-      },
-      {
-        name  = "GOOGLE_REDIRECT_URI"
-        value = var.google_redirect_uri
-      },
-      {
-        name  = "CLAUDE_API_KEY"
-        value = var.claude_api_key
-      },
-      {
-        name  = "JWT_SECRET"
-        value = var.jwt_secret
-      }
-    ]
+        {
+          name  = "DATABASE_URL"
+          value = "postgresql://${aws_db_instance.db.username}:${var.db_password}@${aws_db_instance.db.endpoint}/${aws_db_instance.db.db_name}"
+        },
+        {
+          name  = "GOOGLE_CLIENT_ID"
+          value = var.google_client_id
+        },
+        {
+          name  = "GOOGLE_CLIENT_SECRET"
+          value = var.google_client_secret
+        },
+        {
+          name  = "GOOGLE_REDIRECT_URI"
+          value = var.google_redirect_uri
+        },
+        {
+          name  = "GOOGLE_API_KEY"
+          value = var.google_api_key
+        },
+        {
+          name  = "JWT_SECRET"
+          value = var.jwt_secret
+        }
+      ]
     }
   ])
 }
