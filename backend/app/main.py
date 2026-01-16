@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import os
@@ -17,6 +17,23 @@ load_dotenv()
 # Rate limiter
 limiter = Limiter(key_func=get_remote_address)
 
+# Custom CORS-aware rate limit handler
+async def cors_rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    origin = request.headers.get("origin")
+    headers = {
+        "Content-Type": "application/json",
+    }
+    if origin in origins:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+        headers["Access-Control-Allow-Methods"] = "*"
+        headers["Access-Control-Allow-Headers"] = "*"
+    return Response(
+        content='{"detail": "Rate limit exceeded. Please try again later."}',
+        status_code=429,
+        headers=headers
+    )
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -30,7 +47,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Cortex Agent API", lifespan=lifespan)
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, cors_rate_limit_handler)
 
 # CORS configuration
 origins = [
@@ -47,6 +64,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Include routers
