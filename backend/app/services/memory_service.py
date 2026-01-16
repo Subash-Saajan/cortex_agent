@@ -6,6 +6,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage
 from ..db.models import MemoryFact, MemoryEmbedding
 import json
+import uuid
 
 llm = ChatGoogleGenerativeAI(model="gemini-1.5-pro", google_api_key=os.getenv("GOOGLE_API_KEY"))
 
@@ -31,7 +32,8 @@ Only return JSON, no other text."""
         response = llm.invoke([HumanMessage(content=prompt)])
 
         try:
-            facts = json.loads(response.content)
+            content = getattr(response, 'content', str(response))
+            facts = json.loads(content)
             return facts if isinstance(facts, list) else []
         except (json.JSONDecodeError, AttributeError):
             return []
@@ -40,11 +42,13 @@ Only return JSON, no other text."""
     async def store_fact(user_id: str, fact: str, category: str, db: AsyncSession) -> MemoryFact:
         """Store a fact with embedding"""
 
-        embedding_response = llm.invoke([HumanMessage(content=f"Convert this to a searchable vector representation: {fact}")])
+        try:
+            user_uuid = uuid.UUID(user_id)
+        except ValueError:
+            user_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, user_id)
 
-        # Create memory fact
         memory_fact = MemoryFact(
-            user_id=user_id,
+            user_id=user_uuid,
             fact=fact,
             category=category,
             importance=0.7
@@ -53,11 +57,9 @@ Only return JSON, no other text."""
         db.add(memory_fact)
         await db.flush()
 
-        # Create embedding (using text representation for now)
-        # In production, use actual vector embeddings from OpenAI or similar
         memory_embedding = MemoryEmbedding(
             memory_fact_id=memory_fact.id,
-            embedding=[0.0] * 1536  # Placeholder - would use actual embeddings
+            embedding=[0.0] * 1536
         )
 
         db.add(memory_embedding)
@@ -69,9 +71,12 @@ Only return JSON, no other text."""
     async def retrieve_relevant_facts(user_id: str, query: str, db: AsyncSession, limit: int = 5) -> List[str]:
         """Retrieve relevant facts for a query using similarity search"""
 
-        # For now, simple keyword-based retrieval
-        # In production, use pgvector similarity search
-        stmt = select(MemoryFact).where(MemoryFact.user_id == user_id).limit(limit)
+        try:
+            user_uuid = uuid.UUID(user_id)
+        except ValueError:
+            user_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, user_id)
+
+        stmt = select(MemoryFact).where(MemoryFact.user_id == user_uuid).limit(limit)
         result = await db.execute(stmt)
         facts = result.scalars().all()
 
@@ -81,7 +86,12 @@ Only return JSON, no other text."""
     async def get_memory_context(user_id: str, db: AsyncSession) -> str:
         """Get formatted memory context for agent"""
 
-        stmt = select(MemoryFact).where(MemoryFact.user_id == user_id).limit(10)
+        try:
+            user_uuid = uuid.UUID(user_id)
+        except ValueError:
+            user_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, user_id)
+
+        stmt = select(MemoryFact).where(MemoryFact.user_id == user_uuid).limit(10)
         result = await db.execute(stmt)
         facts = result.scalars().all()
 
