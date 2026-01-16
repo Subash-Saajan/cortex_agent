@@ -49,19 +49,61 @@ async def get_or_create_user(user_id: str, db: AsyncSession) -> User:
 @router.post("/chat", response_model=ChatResponse)
 @limiter.limit("10/minute")
 async def chat(request: Request, chat_request: ChatRequest, db: AsyncSession = Depends(get_db)):
-    """Chat endpoint with agent and memory - Rate limited"""
+    """Chat endpoint with agent, memory, email, and calendar - Rate limited"""
 
     from langchain_google_genai import ChatGoogleGenerativeAI
     from langchain_core.messages import HumanMessage
     import os
 
     api_key = os.getenv("GOOGLE_API_KEY")
-    print(f"API Key: {api_key[:10] if api_key else 'None'}...")
+    user_id = chat_request.user_id
+    message = chat_request.message.lower()
+
+    # Check if user is asking about email or calendar
+    is_email_query = any(word in message for word in ['email', 'mail', 'inbox', 'message', 'latest email', 'recent email', 'unread'])
+    is_calendar_query = any(word in message for word in ['calendar', 'event', 'meeting', 'schedule', 'appointment'])
+
+    # Build context
+    context_parts = []
+
+    # Add email context if relevant
+    if is_email_query:
+        try:
+            from ..services.gmail_service import GmailService
+            emails = await GmailService.get_inbox(user_id, db, max_results=5)
+            if emails:
+                email_text = "RECENT EMAILS:\n"
+                for email in emails[:5]:
+                    email_text += f"- {email['subject']} from {email['from']}\n  {email['preview']}\n\n"
+                context_parts.append(email_text)
+        except Exception as e:
+            context_parts.append(f"Note: Could not fetch emails: {str(e)}\n")
+
+    # Add calendar context if relevant
+    if is_calendar_query:
+        try:
+            from ..services.calendar_service import CalendarService
+            events = await CalendarService.get_events(user_id, db, days_ahead=7)
+            if events:
+                event_text = "UPCOMING CALENDAR EVENTS:\n"
+                for event in events[:5]:
+                    event_text += f"- {event['summary']}: {event['start']}\n"
+                context_parts.append(event_text)
+        except Exception as e:
+            context_parts.append(f"Note: Could not fetch calendar: {str(e)}\n")
+
+    # Build the full prompt
+    if context_parts:
+        full_prompt = "Use the following context to answer the user's question:\n\n"
+        full_prompt += "\n".join(context_parts)
+        full_prompt += f"\n\nUser's question: {chat_request.message}"
+    else:
+        full_prompt = chat_request.message
 
     try:
         llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", google_api_key=api_key)
-        response = await llm.ainvoke([HumanMessage(content=chat_request.message)])
-        return ChatResponse(response=response.content, user_id=chat_request.user_id)
+        response = await llm.ainvoke([HumanMessage(content=full_prompt)])
+        return ChatResponse(response=response.content, user_id=user_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"LLM Error: {str(e)}")
 
