@@ -154,14 +154,17 @@ export default function Home() {
 
   if (!isLoggedIn) {
     return (
-      <div className="bg-mesh">
+      <>
+        <div className="bg-mesh" />
         <div style={{
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
           height: '100vh',
-          padding: '20px'
+          padding: '20px',
+          position: 'relative',
+          zIndex: 1
         }}>
           <div className="glass-card" style={{
             padding: '60px 40px',
@@ -197,12 +200,13 @@ export default function Home() {
             {error && <p style={{ color: '#ef4444', marginTop: '20px', fontSize: '0.9rem' }}>{error}</p>}
           </div>
         </div>
-      </div>
+      </>
     )
   }
 
   return (
-    <div className="bg-mesh">
+    <>
+      <div className="bg-mesh" />
       <div className="chat-container">
         <header className="header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -308,6 +312,6 @@ export default function Home() {
           overflow: hidden;
         }
       `}</style>
-    </div>
+    </>
   )
 }
