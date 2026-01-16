@@ -44,24 +44,22 @@ When responding:
 Current user context and memories:
 {memory_context}"""
 
-    def process_message(state: AgentState) -> AgentState:
-        """Process user message with Claude"""
+    async def process_message(state: AgentState) -> AgentState:
+        """Process user message with Gemini"""
         memory_context = state.get("memory_context", "No prior context.")
 
-        # Build message list with system prompt
         messages_with_system = [
             SystemMessage(content=SYSTEM_PROMPT.format(memory_context=memory_context))
         ] + state["messages"]
 
-        # Call Claude
-        response = llm.invoke(messages_with_system)
+        response = await llm.ainvoke(messages_with_system)
 
         state["response"] = response.content
         state["messages"].append(AIMessage(content=response.content))
 
         return state
 
-    def extract_memory(state: AgentState) -> AgentState:
+    async def extract_memory(state: AgentState) -> AgentState:
         """Extract facts from conversation for memory"""
         # For now, simple extraction - can be enhanced later
         last_user_message = None
