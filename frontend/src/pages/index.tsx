@@ -15,7 +15,13 @@ export default function Home() {
 
   useEffect(() => {
     // Check for auth token in URL (OAuth callback)
-    const { token, user_id } = router.query
+    const { token, user_id, warning, error } = router.query
+    if (error) {
+      setError(decodeURIComponent(error as string))
+    }
+    if (warning) {
+      setError(decodeURIComponent(warning as string))
+    }
     if (token && user_id) {
       localStorage.setItem('token', token as string)
       localStorage.setItem('userId', user_id as string)

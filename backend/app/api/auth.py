@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Request, Response
+from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
@@ -19,6 +20,7 @@ router = APIRouter()
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "https://d3ouv9vt88djdf.cloudfront.net/api/auth/callback")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://cortex.subashsaajan.site")
 JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key")
 JWT_ALGORITHM = "HS256"
 
@@ -117,15 +119,27 @@ async def callback(code: str = Query(...), db: AsyncSession = Depends(get_db)):
         flow.redirect_uri = GOOGLE_REDIRECT_URI
 
         # Get token from authorization code
-        flow.fetch_token(code=code)
-        credentials = flow.credentials
+        try:
+            flow.fetch_token(code=code)
+            credentials = flow.credentials
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"OAuth token exchange failed: {str(e)}")
 
         # Get user info from id_token
-        user_info = verify_oauth2_token(credentials.id_token, GOOGLE_CLIENT_ID)
+        try:
+            user_info = verify_oauth2_token(credentials.id_token, GOOGLE_CLIENT_ID)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Token verification failed: {str(e)}")
+
+        if not user_info:
+            raise HTTPException(status_code=400, detail="Invalid token information")
 
         email = user_info.get("email")
         google_id = user_info.get("sub")
         name = user_info.get("name")
+
+        if not email or not google_id:
+            raise HTTPException(status_code=400, detail="Missing required user information")
 
         # Get or create user
         stmt = select(User).where(User.google_id == google_id)
@@ -142,7 +156,9 @@ async def callback(code: str = Query(...), db: AsyncSession = Depends(get_db)):
             )
             db.add(user)
         else:
-            user.refresh_token = credentials.refresh_token
+            # Update existing user's refresh token if provided
+            if credentials.refresh_token:
+                user.refresh_token = credentials.refresh_token
             user.updated_at = datetime.utcnow()
 
         await db.commit()
@@ -150,14 +166,27 @@ async def callback(code: str = Query(...), db: AsyncSession = Depends(get_db)):
         # Create JWT token
         access_token = create_access_token(str(user.id), user.email)
 
-        return TokenResponse(
-            access_token=access_token,
-            user_id=str(user.id),
-            email=user.email
-        )
+        # Build redirect URL with query parameters
+        redirect_url = f"{FRONTEND_URL}?token={access_token}&user_id={str(user.id)}"
+        
+        # Check if user has valid refresh token for API access
+        if not user.refresh_token:
+            # User authenticated but no refresh token - warn them
+            redirect_url += "&warning=Please+sign+in+again+to+enable+Gmail+and+Calendar+features"
+        
+        return RedirectResponse(url=redirect_url)
 
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"OAuth error: {str(e)}")
+        import traceback
+        error_detail = str(e)
+        # If it's the "'str' object is not callable" error, provide more context
+        if "'str' object is not callable" in str(e):
+            error_detail = "OAuth configuration error. Please check your Google OAuth credentials and configuration."
+        
+        error_url = f"{FRONTEND_URL}?error={error_detail}"
+        return RedirectResponse(url=error_url)
 
 @router.get("/verify")
 async def verify_token_endpoint(token: str = Query(...)):

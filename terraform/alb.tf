@@ -15,6 +15,15 @@ resource "aws_security_group" "alb" {
     description = "HTTPS from internet"
   }
 
+  # Allow HTTPS from CloudFront (for API routing)
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["13.32.0.0/15", "52.84.0.0/15", "204.246.164.0/22"]
+    description = "HTTPS from CloudFront"
+  }
+
   # Allow HTTP (for health checks and redirect to HTTPS)
   ingress {
     from_port   = 80
@@ -47,7 +56,7 @@ resource "aws_lb" "backend" {
   subnets            = aws_subnet.public[*].id
 
   enable_deletion_protection = false
-  enable_http2              = true
+  enable_http2               = true
 
   tags = {
     Name = "cortex-agent-alb"
