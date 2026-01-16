@@ -30,12 +30,17 @@ async def get_or_create_user(user_id: str, db: AsyncSession) -> User:
     """Get or create user"""
     from sqlalchemy import select
 
-    stmt = select(User).where(User.id == uuid.UUID(user_id))
+    try:
+        user_uuid = uuid.UUID(user_id)
+    except ValueError:
+        user_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, user_id)
+
+    stmt = select(User).where(User.id == user_uuid)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
 
     if not user:
-        user = User(id=uuid.UUID(user_id), email=f"user-{user_id}@cortex.ai")
+        user = User(id=user_uuid, email=f"user-{user_id}@cortex.ai")
         db.add(user)
         await db.commit()
 
@@ -102,7 +107,12 @@ async def get_chat_history(request: Request, user_id: str, db: AsyncSession = De
     """Get chat history for user - Rate limited"""
     from sqlalchemy import select
 
-    stmt = select(ChatMessage).where(ChatMessage.user_id == uuid.UUID(user_id)).order_by(ChatMessage.created_at)
+    try:
+        user_uuid = uuid.UUID(user_id)
+    except ValueError:
+        user_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, user_id)
+
+    stmt = select(ChatMessage).where(ChatMessage.user_id == user_uuid).order_by(ChatMessage.created_at)
     result = await db.execute(stmt)
     messages = result.scalars().all()
 
