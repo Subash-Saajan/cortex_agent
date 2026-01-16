@@ -181,13 +181,23 @@ def build_agent_graph():
     
     return workflow.compile()
 
-async def run_agent(user_id: str, input_message: str, db: Any):
+async def run_agent(user_id: str, input_message: str, db: Any, conversation_history: list = None):
     """Run the agent and return the final response"""
     graph = build_agent_graph()
     
+    messages = []
+    if conversation_history:
+        for msg in conversation_history:
+            if msg["role"] == "user":
+                messages.append(HumanMessage(content=msg["content"]))
+            elif msg["role"] == "assistant":
+                messages.append(AIMessage(content=msg["content"]))
+    else:
+        messages = [HumanMessage(content=input_message)]
+    
     initial_state = {
         "user_id": user_id,
-        "messages": [HumanMessage(content=input_message)],
+        "messages": messages,
         "memory_context": "",
         "email_context": "",
         "calendar_context": "",
@@ -196,7 +206,6 @@ async def run_agent(user_id: str, input_message: str, db: Any):
     
     result = await graph.ainvoke(initial_state)
     
-    # The final message from the LLM is the last AI message in the list
     ai_messages = [m for m in result["messages"] if isinstance(m, AIMessage)]
     if ai_messages:
         return ai_messages[-1].content

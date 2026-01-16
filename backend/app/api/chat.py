@@ -9,9 +9,15 @@ from ..db.database import get_db
 from ..db.models import User, ChatMessage
 from ..services.memory_service import MemoryService
 import uuid
+from collections import deque
+import os
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
+
+MAX_CONVERSATION_LENGTH = 10
+
+conversation_histories = {}
 
 class ChatRequest(BaseModel):
     message: str
@@ -47,7 +53,7 @@ async def get_or_create_user(user_id: str, db: AsyncSession) -> User:
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: Request, chat_request: ChatRequest, db: AsyncSession = Depends(get_db)):
-    """Chat endpoint using the intelligent LangGraph agent"""
+    """Chat endpoint using the intelligent LangGraph agent with conversation memory"""
 
     from ..agent.graph import run_agent
     from ..db.models import ChatMessage
@@ -56,11 +62,16 @@ async def chat(request: Request, chat_request: ChatRequest, db: AsyncSession = D
     user_id = chat_request.user_id
     message = chat_request.message
 
-    try:
-        # 1. Run the intelligent agent
-        response_text = await run_agent(user_id, message, db)
+    if user_id not in conversation_histories:
+        conversation_histories[user_id] = deque(maxlen=MAX_CONVERSATION_LENGTH)
 
-        # 2. Store messages in history
+    conversation_histories[user_id].append({"role": "user", "content": message})
+
+    try:
+        response_text = await run_agent(user_id, message, db, list(conversation_histories[user_id]))
+
+        conversation_histories[user_id].append({"role": "assistant", "content": response_text})
+
         try:
             user_uuid = uuid.UUID(user_id)
         except ValueError:
@@ -77,13 +88,11 @@ async def chat(request: Request, chat_request: ChatRequest, db: AsyncSession = D
         
     except Exception as e:
         import traceback
-        import os
         import google.generativeai as genai
         
         print(f"Agent Error: {str(e)}")
         print(traceback.format_exc())
         
-        # DEBUG: List available models if it's a 404/not found error
         if "404" in str(e) or "not found" in str(e).lower():
             try:
                 print("--- DEBUG: CHECKING AVAILABLE MODELS ---")
