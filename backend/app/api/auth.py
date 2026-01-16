@@ -193,22 +193,3 @@ async def verify_token_endpoint(token: str = Query(...)):
     """Verify JWT token"""
     payload = verify_token(token)
     return {"user_id": payload["user_id"], "email": payload["email"]}
-
-@router.get("/user/{user_id}")
-async def get_user(user_id: str, db: AsyncSession = Depends(get_db)):
-    """Get user info by user_id"""
-    try:
-        stmt = select(User).where(User.id == uuid.UUID(user_id))
-        result = await db.execute(stmt)
-        user = result.scalar_one_or_none()
-        
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        return {
-            "id": str(user.id),
-            "email": user.email,
-            "name": user.name
-        }
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid user_id format")

@@ -55,18 +55,16 @@ async def chat(request: Request, chat_request: ChatRequest, db: AsyncSession = D
     from ..services.gmail_service import GmailService
     from ..services.calendar_service import CalendarService
     import os
-    import re
 
     api_key = os.getenv("GOOGLE_API_KEY")
     user_id = chat_request.user_id
     message = chat_request.message
     message_lower = message.lower()
 
-    # Check intent
-    needs_email = any(w in message_lower for w in ["email", "mail", "inbox", "latest", "recent", "unread", "message", "from"])
-    needs_calendar = any(w in message_lower for w in ["meeting", "meet", "calendar", "schedule", "event", "jan ", " feb", " mar", "appointment", "do i have", "any meet", "any meeting"])
+    # Check if we need to fetch email/calendar
+    needs_email = any(w in message_lower for w in ["email", "mail", "inbox", "latest", "recent", "unread", "message"])
+    needs_calendar = any(w in message_lower for w in ["meeting", "meet", "calendar", "schedule", "event", "jan ", " feb", " mar", "appointment"])
     needs_memory_update = any(w in message_lower for w in ["prefer", "don't like", "hate", "remember", "always", "never", "important", "vacation", "on vacation", "until"])
-    needs_email_draft = any(phrase in message_lower for phrase in ["reply to", "send an email", "send email", "draft an email", "write an email", "compose email"])
 
     email_context = ""
     calendar_context = ""
@@ -77,15 +75,13 @@ async def chat(request: Request, chat_request: ChatRequest, db: AsyncSession = D
     calendar_task = None
     memory_task = None
 
-    if needs_email or needs_calendar:
+    if needs_email or needs_calendar or needs_memory_update:
         if needs_email:
             email_task = GmailService.get_inbox(user_id, db, max_results=5)
         if needs_calendar:
             calendar_task = CalendarService.get_events(user_id, db, days_ahead=30)
         if needs_memory_update:
             memory_task = MemoryService.get_memory_context(user_id, db, min_importance=0.3)
-    elif needs_memory_update:
-        memory_task = MemoryService.get_memory_context(user_id, db, min_importance=0.3)
 
     # Wait for tasks
     if email_task:
@@ -104,22 +100,11 @@ async def chat(request: Request, chat_request: ChatRequest, db: AsyncSession = D
         try:
             events = await calendar_task
             if events:
-                # Check for specific date queries
-                jan_17_match = re.search(r'jan\s*17|january\s*17|17\s*jan', message_lower)
-                if jan_17_match:
-                    jan_17_events = [e for e in events if "2026-01-17" in e.get('start', '') or "2025-01-17" in e.get('start', '')]
-                    if jan_17_events:
-                        calendar_context = "EVENTS ON JANUARY 17TH:\n" + "\n".join([
-                            f"- {e.get('summary', 'Event')} at {e.get('start', 'TBD')}" for e in jan_17_events
-                        ])
-                    else:
-                        calendar_context = "No events found on January 17th."
-                else:
-                    calendar_context = "CALENDAR EVENTS:\n" + "\n".join([
-                        f"- {e.get('summary', 'Event')}: {e.get('start', 'TBD')}" for e in events[:10]
-                    ])
+                calendar_context = "CALENDAR EVENTS:\n" + "\n".join([
+                    f"- {e.get('summary', 'Event')}: {e.get('start', 'TBD')}" for e in events[:10]
+                ])
             else:
-                calendar_context = "No upcoming events in your calendar."
+                calendar_context = "No upcoming events."
         except Exception as e:
             calendar_context = f"Could not fetch calendar: {str(e)}"
 
@@ -128,14 +113,6 @@ async def chat(request: Request, chat_request: ChatRequest, db: AsyncSession = D
             memory_context = await memory_task
         except:
             memory_context = ""
-
-    # Check if asking about calendar on specific date
-    calendar_answer = ""
-    if needs_calendar and calendar_context:
-        if "no events found" in calendar_context.lower() or "no upcoming events" in calendar_context.lower():
-            calendar_answer = "You have no events scheduled."
-        else:
-            calendar_answer = calendar_context
 
     # Build comprehensive system prompt
     system_prompt = f"""You are Cortex, a personal AI Chief of Staff assistant with access to user's email, calendar, and long-term memory.
@@ -160,14 +137,8 @@ CRITICAL INSTRUCTIONS:
 - If asked about emails, USE the email context provided above  
 - If user mentions preferences (like "I prefer afternoon meetings"), acknowledge and remember them
 - If user says things like "I'm on vacation until Jan 20th", extract this as a PREFERENCE with high importance
-- If asked to reply to an email, draft a response with Subject: line and body
 - Be helpful, concise, and proactive
-- If you don't have information, clearly say so rather than making things up
-
-When drafting email replies:
-- Return the email in format: "Subject: <subject>\n\n<body>"
-- Keep the tone professional
-- If user says "reply no", draft a brief "No" response"""
+- If you don't have information, clearly say so rather than making things up"""
 
     from langchain_google_genai import ChatGoogleGenerativeAI
     from langchain_core.messages import HumanMessage, SystemMessage
@@ -179,8 +150,6 @@ When drafting email replies:
             HumanMessage(content=message)
         ])
 
-        response_text = response.content
-
         # Extract and store new memories AFTER responding (for next time)
         if needs_memory_update:
             try:
@@ -188,7 +157,7 @@ When drafting email replies:
             except:
                 pass
 
-        return ChatResponse(response=response_text, user_id=user_id)
+        return ChatResponse(response=response.content, user_id=user_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"LLM Error: {str(e)}")
 
