@@ -7,6 +7,8 @@ from google.oauth2.credentials import Credentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..db.models import User
 from sqlalchemy import select
+import io
+from pypdf import PdfReader
 
 class GmailService:
     """Service for Gmail API interactions"""
@@ -114,3 +116,84 @@ class GmailService:
 
         except Exception as e:
             raise ValueError(f"Error sending email: {str(e)}")
+
+    @staticmethod
+    async def get_attachment(user_id: str, message_id: str, attachment_id: str, db: AsyncSession) -> str:
+        """Get PDF attachment and extract text"""
+        try:
+            service = await GmailService.get_service(user_id, db)
+
+            # Download attachment
+            attachment = service.users().messages().attachments().get(
+                userId="me",
+                messageId=message_id,
+                id=attachment_id
+            ).execute()
+
+            # Decode base64
+            data = base64.urlsafe_b64decode(attachment["data"])
+
+            # Extract text from PDF
+            pdf_file = io.BytesIO(data)
+            reader = PdfReader(pdf_file)
+            text = ""
+            for page in reader.pages:
+                text += page.extract_text() + "\n"
+
+            return text
+
+        except Exception as e:
+            raise ValueError(f"Error extracting PDF: {str(e)}")
+
+    @staticmethod
+    async def get_message_with_attachments(user_id: str, message_id: str, db: AsyncSession) -> dict:
+        """Get full message with attachment text extracted"""
+        try:
+            service = await GmailService.get_service(user_id, db)
+
+            msg_data = service.users().messages().get(
+                userId="me",
+                id=message_id,
+                format="full"
+            ).execute()
+
+            headers = msg_data["payload"]["headers"]
+            subject = next((h["value"] for h in headers if h["name"] == "Subject"), "No Subject")
+            sender = next((h["value"] for h in headers if h["name"] == "From"), "Unknown")
+            date = next((h["value"] for h in headers if h["name"] == "Date"), "")
+
+            attachments = []
+            if "parts" in msg_data["payload"]:
+                for part in msg_data["payload"]["parts"]:
+                    if part["mimeType"] == "application/pdf":
+                        attachment_id = part["body"]["attachmentId"]
+                        filename = part.get("filename", "attachment.pdf")
+                        text = await GmailService.get_attachment(user_id, message_id, attachment_id, db)
+                        attachments.append({
+                            "filename": filename,
+                            "text": text
+                        })
+
+            # Get body
+            body = ""
+            if "parts" in msg_data["payload"]:
+                for part in msg_data["payload"]["parts"]:
+                    if part["mimeType"] == "text/plain":
+                        if "data" in part["body"]:
+                            body = base64.urlsafe_b64decode(part["body"]["data"]).decode("utf-8")
+                        break
+            else:
+                if "body" in msg_data["payload"]:
+                    body = base64.urlsafe_b64decode(msg_data["payload"]["body"]["data"]).decode("utf-8")
+
+            return {
+                "id": message_id,
+                "subject": subject,
+                "from": sender,
+                "date": date,
+                "body": body,
+                "attachments": attachments
+            }
+
+        except Exception as e:
+            raise ValueError(f"Error getting message: {str(e)}")

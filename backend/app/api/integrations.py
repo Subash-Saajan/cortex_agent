@@ -4,6 +4,9 @@ from pydantic import BaseModel
 from ..db.database import get_db
 from ..services.gmail_service import GmailService
 from ..services.calendar_service import CalendarService
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.messages import HumanMessage
+import os
 
 router = APIRouter()
 
@@ -20,6 +23,11 @@ class EventCreateRequest(BaseModel):
     end_time: str
     description: str = ""
     location: str = ""
+
+class AnalyzeEmailRequest(BaseModel):
+    user_id: str
+    message_id: str
+    question: str = "Summarize this email and attachments"
 
 # Gmail Endpoints
 @router.get("/gmail/inbox/{user_id}")
@@ -70,5 +78,45 @@ async def create_event(request: EventCreateRequest, db: AsyncSession = Depends(g
             db
         )
         return {"event_id": event_id, "status": "created"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/gmail/analyze")
+async def analyze_email(request: AnalyzeEmailRequest, db: AsyncSession = Depends(get_db)):
+    """Analyze email and attachments with Gemini"""
+    try:
+        # Get message with attachments
+        message = await GmailService.get_message_with_attachments(
+            request.user_id,
+            request.message_id,
+            db
+        )
+
+        # Build content for analysis
+        content = f"Subject: {message['subject']}\n"
+        content += f"From: {message['from']}\n"
+        content += f"Date: {message['date']}\n\n"
+        content += f"Body:\n{message['body']}\n\n"
+
+        if message['attachments']:
+            for att in message['attachments']:
+                content += f"\n--- Attachment: {att['filename']} ---\n"
+                content += f"{att['text']}\n"
+
+        content += f"\n\nQuestion: {request.question}"
+
+        # Analyze with Gemini
+        llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", google_api_key=os.getenv("GOOGLE_API_KEY"))
+        response = await llm.ainvoke([HumanMessage(content=content)])
+
+        return {
+            "message": {
+                "subject": message["subject"],
+                "from": message["from"],
+                "date": message["date"]
+            },
+            "analysis": response.content
+        }
+
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
