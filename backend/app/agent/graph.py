@@ -1,15 +1,17 @@
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolExecutor, ToolInvocation
-from langchain_anthropic import ChatAnthropic
+from langgraph.graph import StateGraph, END
+from langgraph.prebuilt import ToolExecutor, ToolInvocation
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from typing import TypedDict, List, Any
 import json
 import os
 
-# Initialize Claude model
-llm = ChatAnthropic(
-    model="claude-3-5-sonnet-20241022",
-    api_key=os.getenv("CLAUDE_API_KEY")
+# Initialize Gemini model
+llm = ChatGoogleGenerativeAI(
+    model="gemini-1.5-pro",
+    google_api_key=os.getenv("GOOGLE_API_KEY")
 )
 
 class AgentState(TypedDict):
