@@ -51,83 +51,94 @@ async def get_or_create_user(user_id: str, db: AsyncSession) -> User:
 async def chat(request: Request, chat_request: ChatRequest, db: AsyncSession = Depends(get_db)):
     """Chat endpoint with agent, memory, email, and calendar - Rate limited"""
 
-    from ..agent.graph import run_agent
     from ..services.memory_service import MemoryService
+    from ..services.gmail_service import GmailService
+    from ..services.calendar_service import CalendarService
     import os
 
     api_key = os.getenv("GOOGLE_API_KEY")
     user_id = chat_request.user_id
     message = chat_request.message
-
-    # Get memory context
-    memory_context = await MemoryService.get_memory_context(user_id, db)
+    message_lower = message.lower()
 
     # Check if we need to fetch email/calendar
-    message_lower = message.lower()
-    needs_email_or_calendar = any(w in message_lower for w in [
-        "email", "mail", "inbox", "calendar", "meeting", "schedule", 
-        "event", "latest email", "recent email", "upcoming"
-    ])
+    needs_email = any(w in message_lower for w in ["email", "mail", "inbox", "latest", "recent", "unread", "message"])
+    needs_calendar = any(w in message_lower for w in ["meeting", "meet", "calendar", "schedule", "event", "jan ", " feb", " mar", "appointment"])
+    needs_memory_update = any(w in message_lower for w in ["prefer", "don't like", "hate", "remember", "always", "never", "important", "vacation", "on vacation", "until"])
 
     email_context = ""
     calendar_context = ""
+    memory_context = ""
 
-    if needs_email_or_calendar:
-        from ..services.gmail_service import GmailService
-        from ..services.calendar_service import CalendarService
+    # Fetch context in parallel
+    email_task = None
+    calendar_task = None
+    memory_task = None
 
+    if needs_email or needs_calendar or needs_memory_update:
+        if needs_email:
+            email_task = GmailService.get_inbox(user_id, db, max_results=5)
+        if needs_calendar:
+            calendar_task = CalendarService.get_events(user_id, db, days_ahead=30)
+        if needs_memory_update:
+            memory_task = MemoryService.get_memory_context(user_id, db, min_importance=0.3)
+
+    # Wait for tasks
+    if email_task:
         try:
-            emails = await GmailService.get_inbox(user_id, db, max_results=5)
+            emails = await email_task
             if emails:
                 email_context = "RECENT EMAILS:\n" + "\n".join([
                     f"- {e['subject']} from {e['from']}\n  {e['preview']}" for e in emails[:5]
                 ])
+            else:
+                email_context = "No recent emails found."
         except Exception as e:
             email_context = f"Could not fetch emails: {str(e)}"
 
+    if calendar_task:
         try:
-            events = await CalendarService.get_events(user_id, db, days_ahead=7)
+            events = await calendar_task
             if events:
-                calendar_context = "UPCOMING EVENTS:\n" + "\n".join([
-                    f"- {e.get('summary', 'Event')}: {e.get('start', 'TBD')}" for e in events[:5]
+                calendar_context = "CALENDAR EVENTS:\n" + "\n".join([
+                    f"- {e.get('summary', 'Event')}: {e.get('start', 'TBD')}" for e in events[:10]
                 ])
+            else:
+                calendar_context = "No upcoming events."
         except Exception as e:
             calendar_context = f"Could not fetch calendar: {str(e)}"
 
-    # Check if we need to update memory (user stating preferences/constraints)
-    needs_memory_update = any(w in message_lower for w in [
-        "i prefer", "i don't like", "i hate", "i like", "remember",
-        "always", "never", "i want", "i need", "make sure",
-        "important", "don't forget", "keep in mind"
-    ])
+    if memory_task:
+        try:
+            memory_context = await memory_task
+        except:
+            memory_context = ""
 
-    if needs_memory_update:
-        await MemoryService.extract_facts(user_id, message, db, source="chat")
-        memory_context = await MemoryService.get_memory_context(user_id, db)
-
-    # Build the prompt
-    system_prompt = f"""You are Cortex, a personal AI Chief of Staff assistant.
+    # Build comprehensive system prompt
+    system_prompt = f"""You are Cortex, a personal AI Chief of Staff assistant with access to user's email, calendar, and long-term memory.
 
 Your capabilities:
-1. Answer questions about emails and calendar
-2. Draft and send emails based on user requests  
-3. Remember user preferences, constraints, and important context
-4. Help manage the user's day and projects
+1. Answer questions about emails, calendar, and preferences
+2. Remember user preferences, constraints, and important context
+3. Help manage the user's day and projects
 
-Available memory about the user:
-{memory_context}
+USER CONTEXT:
+Memory (your long-term memory about this user):
+{memory_context if memory_context else "No prior memory stored."}
 
-Email context (if any):
+Email context:
 {email_context if email_context else "Not asked about email."}
 
-Calendar context (if any):
+Calendar context:
 {calendar_context if calendar_context else "Not asked about calendar."}
 
-Guidelines:
-- Be concise and helpful
-- If asked about emails, use the provided email context
-- If asked about calendar, use the provided calendar context
-- Remember important constraints and preferences the user mentions"""
+CRITICAL INSTRUCTIONS:
+- If asked about calendar/meetings, USE the calendar context provided above
+- If asked about emails, USE the email context provided above  
+- If user mentions preferences (like "I prefer afternoon meetings"), acknowledge and remember them
+- If user says things like "I'm on vacation until Jan 20th", extract this as a PREFERENCE with high importance
+- Be helpful, concise, and proactive
+- If you don't have information, clearly say so rather than making things up"""
 
     from langchain_google_genai import ChatGoogleGenerativeAI
     from langchain_core.messages import HumanMessage, SystemMessage
@@ -139,8 +150,12 @@ Guidelines:
             HumanMessage(content=message)
         ])
 
-        # After responding, extract any new facts from this conversation
-        await MemoryService.extract_facts(user_id, message, db, source="chat")
+        # Extract and store new memories AFTER responding (for next time)
+        if needs_memory_update:
+            try:
+                await MemoryService.extract_facts(user_id, message, db, source="chat")
+            except:
+                pass
 
         return ChatResponse(response=response.content, user_id=user_id)
     except Exception as e:
