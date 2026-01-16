@@ -270,6 +270,10 @@ resource "aws_ecs_task_definition" "backend" {
           value = var.google_api_key
         },
         {
+          name  = "ANTHROPIC_API_KEY"
+          value = var.claude_api_key
+        },
+        {
           name  = "JWT_SECRET"
           value = var.jwt_secret
         }
