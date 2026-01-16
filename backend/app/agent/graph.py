@@ -1,18 +1,10 @@
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolExecutor, ToolInvocation
-from langgraph.graph import StateGraph, END
-from langgraph.prebuilt import ToolExecutor, ToolInvocation
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from typing import TypedDict, List, Any
 import json
 import os
-
-# Initialize Gemini model
-llm = ChatGoogleGenerativeAI(
-    model="gemini-1.5-pro",
-    google_api_key=os.getenv("GOOGLE_API_KEY")
-)
 
 class AgentState(TypedDict):
     """State for the agent"""
@@ -20,6 +12,13 @@ class AgentState(TypedDict):
     messages: List[Any]
     memory_context: str
     response: str
+
+def get_llm():
+    """Get LLM instance - lazily initialized"""
+    return ChatGoogleGenerativeAI(
+        model="gemini-1.5-pro",
+        google_api_key=os.getenv("GOOGLE_API_KEY")
+    )
 
 def create_agent_graph():
     """Create the LangGraph agent workflow"""
@@ -52,6 +51,7 @@ Current user context and memories:
             SystemMessage(content=SYSTEM_PROMPT.format(memory_context=memory_context))
         ] + state["messages"]
 
+        llm = get_llm()
         response = await llm.ainvoke(messages_with_system)
 
         state["response"] = response.content
