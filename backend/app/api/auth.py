@@ -62,7 +62,14 @@ def verify_token(token: str) -> dict:
 @router.get("/login")
 async def login():
     """Generate Google OAuth URL"""
+    import logging
+    import traceback
+    logger = logging.getLogger("cortex-api")
+    
+    logger.info(f"Login attempt - CLIENT_ID set: {bool(GOOGLE_CLIENT_ID)}, SECRET set: {bool(GOOGLE_CLIENT_SECRET)}")
+    
     if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        logger.error(f"OAuth not configured - CLIENT_ID: {bool(GOOGLE_CLIENT_ID)}, SECRET: {bool(GOOGLE_CLIENT_SECRET)}")
         raise HTTPException(status_code=500, detail="Google OAuth not configured")
 
     # Create OAuth 2.0 flow
