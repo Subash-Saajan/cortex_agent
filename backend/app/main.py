@@ -1,38 +1,15 @@
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import os
 from dotenv import load_dotenv
 from sqlalchemy import text
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
 from .db.database import engine, Base
 from .api.chat import router as chat_router
 from .api.auth import router as auth_router
 from .api.integrations import router as integrations_router
 
 load_dotenv()
-
-# Rate limiter
-limiter = Limiter(key_func=get_remote_address)
-
-# Custom CORS-aware rate limit handler
-async def cors_rate_limit_handler(request: Request, exc: RateLimitExceeded):
-    origin = request.headers.get("origin")
-    headers = {
-        "Content-Type": "application/json",
-    }
-    if origin in origins:
-        headers["Access-Control-Allow-Origin"] = origin
-        headers["Access-Control-Allow-Credentials"] = "true"
-        headers["Access-Control-Allow-Methods"] = "*"
-        headers["Access-Control-Allow-Headers"] = "*"
-    return Response(
-        content='{"detail": "Rate limit exceeded. Please try again later."}',
-        status_code=429,
-        headers=headers
-    )
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -46,16 +23,14 @@ async def lifespan(app: FastAPI):
     await engine.dispose()
 
 app = FastAPI(title="Cortex Agent API", lifespan=lifespan)
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, cors_rate_limit_handler)
 
-# CORS configuration
+# CORS configuration - Same as before but verified
 origins = [
-    "https://cortex.subashsaajan.site",       # Frontend
-    "https://api.cortex.subashsaajan.site",   # API
-    "https://d3ouv9vt88djdf.cloudfront.net",  # CloudFront (fallback)
-    "http://localhost:3000",                   # Local frontend
-    "http://localhost:8000",                   # Local backend
+    "https://cortex.subashsaajan.site",
+    "https://api.cortex.subashsaajan.site",
+    "https://d3ouv9vt88djdf.cloudfront.net",
+    "http://localhost:3000",
+    "http://localhost:8000",
 ]
 
 app.add_middleware(
@@ -64,7 +39,6 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"],
 )
 
 # Include routers

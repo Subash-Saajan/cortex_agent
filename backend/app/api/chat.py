@@ -46,7 +46,6 @@ async def get_or_create_user(user_id: str, db: AsyncSession) -> User:
     return user
 
 @router.post("/chat", response_model=ChatResponse)
-@limiter.limit("10/minute")
 async def chat(request: Request, chat_request: ChatRequest, db: AsyncSession = Depends(get_db)):
     """Chat endpoint using the intelligent LangGraph agent"""
 
