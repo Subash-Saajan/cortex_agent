@@ -106,7 +106,7 @@ async def analyze_email(request: AnalyzeEmailRequest, db: AsyncSession = Depends
         content += f"\n\nQuestion: {request.question}"
 
         # Analyze with Gemini
-        llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest", google_api_key=os.getenv("GOOGLE_API_KEY"))
+        llm = ChatGoogleGenerativeAI(model="models/gemini-1.5-flash", google_api_key=os.getenv("GOOGLE_API_KEY"))
         response = await llm.ainvoke([HumanMessage(content=content)])
 
         return {
