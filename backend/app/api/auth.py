@@ -6,7 +6,7 @@ from pydantic import BaseModel
 import os
 import jwt
 from datetime import datetime, timedelta
-from google.auth.transport.requests import Request
+from google.auth.transport import requests as google_requests
 from google.oauth2.id_token import verify_oauth2_token
 from google_auth_oauthlib.flow import Flow
 import json
@@ -127,7 +127,7 @@ async def callback(code: str = Query(...), db: AsyncSession = Depends(get_db)):
 
         # Get user info from id_token
         try:
-            user_info = verify_oauth2_token(credentials.id_token, GOOGLE_CLIENT_ID)
+            user_info = verify_oauth2_token(credentials.id_token, google_requests.Request(), GOOGLE_CLIENT_ID)
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Token verification failed: {str(e)}")
 
