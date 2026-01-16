@@ -78,7 +78,7 @@ async def chat(request: Request, chat_request: ChatRequest, db: AsyncSession = D
         "response": ""
     }
 
-    result_state = agent.invoke(state)
+    result_state = await agent.ainvoke(state)
     response = result_state["response"]
 
     # Store message in database
