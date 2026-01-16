@@ -51,17 +51,16 @@ async def get_or_create_user(user_id: str, db: AsyncSession) -> User:
 async def chat(request: Request, chat_request: ChatRequest, db: AsyncSession = Depends(get_db)):
     """Chat endpoint with agent and memory - Rate limited"""
 
-    # Test LLM directly first
     from langchain_google_genai import ChatGoogleGenerativeAI
     from langchain_core.messages import HumanMessage
     import os
 
     try:
         llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", google_api_key=os.getenv("GOOGLE_API_KEY"))
-        response = llm.invoke([HumanMessage(content=chat_request.message)])
+        response = await llm.ainvoke([HumanMessage(content=chat_request.message)])
         return ChatResponse(response=response.content, user_id=chat_request.user_id)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"LLM Error: {str(e)}")
 
 @router.get("/chat/history/{user_id}")
 @limiter.limit("30/minute")  # 30 requests per minute per IP
