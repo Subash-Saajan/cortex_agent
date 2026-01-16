@@ -55,8 +55,11 @@ async def chat(request: Request, chat_request: ChatRequest, db: AsyncSession = D
     from langchain_core.messages import HumanMessage
     import os
 
+    api_key = os.getenv("GOOGLE_API_KEY")
+    print(f"API Key: {api_key[:10] if api_key else 'None'}...")
+
     try:
-        llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", google_api_key=os.getenv("GOOGLE_API_KEY"))
+        llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", google_api_key=api_key)
         response = await llm.ainvoke([HumanMessage(content=chat_request.message)])
         return ChatResponse(response=response.content, user_id=chat_request.user_id)
     except Exception as e:
