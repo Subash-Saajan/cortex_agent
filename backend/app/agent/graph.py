@@ -16,7 +16,7 @@ class AgentState(TypedDict):
 def get_llm():
     """Get LLM instance - lazily initialized"""
     return ChatGoogleGenerativeAI(
-        model="gemini-1.5-pro",
+        model="gemini-2.5-flash",
         google_api_key=os.getenv("GOOGLE_API_KEY")
     )
 
