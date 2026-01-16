@@ -26,13 +26,15 @@ class ChatMessage(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class MemoryFact(Base):
+    """Memory facts extracted from chat and emails"""
     __tablename__ = "memory_facts"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), nullable=False, index=True)
     fact = Column(Text, nullable=False)
-    category = Column(String(100), nullable=True)  # "preference", "habit", "event", etc.
-    importance = Column(Float, default=0.5)  # 0-1 scale
+    category = Column(String(50), nullable=False)  # preference, habit, project, relationship, constraint, event, personal
+    importance = Column(Float, default=0.5)  # 0.0 to 1.0
+    metadata_json = Column(Text, nullable=True)  # JSON metadata
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
