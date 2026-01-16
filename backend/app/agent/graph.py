@@ -22,7 +22,7 @@ class AgentState(TypedDict):
 def get_llm():
     """Get LLM instance with tool support"""
     return ChatGoogleGenerativeAI(
-        model="gemini-1.5-flash-001",
+        model="gemini-1.5-flash",
         google_api_key=os.getenv("GOOGLE_API_KEY"),
         temperature=0
     )
