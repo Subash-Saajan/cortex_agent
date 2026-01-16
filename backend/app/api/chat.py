@@ -47,59 +47,21 @@ async def get_or_create_user(user_id: str, db: AsyncSession) -> User:
     return user
 
 @router.post("/chat", response_model=ChatResponse)
-@limiter.limit("10/minute")  # 10 requests per minute per IP
+@limiter.limit("10/minute")
 async def chat(request: Request, chat_request: ChatRequest, db: AsyncSession = Depends(get_db)):
-    """Chat endpoint with agent and memory - Rate limited to prevent abuse"""
+    """Chat endpoint with agent and memory - Rate limited"""
 
-    # Get or create user
-    user = await get_or_create_user(chat_request.user_id, db)
+    # Test LLM directly first
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    from langchain_core.messages import HumanMessage
+    import os
 
-    # Get memory context
-    memory_context = await MemoryService.get_memory_context(chat_request.user_id, db)
-
-    # Get recent chat history
-    from sqlalchemy import select
-    stmt = select(ChatMessage).where(ChatMessage.user_id == user.id).order_by(ChatMessage.created_at.desc()).limit(10)
-    result = await db.execute(stmt)
-    messages = reversed(result.scalars().all())
-
-    # Build message list for agent
-    message_list = [
-        HumanMessage(content=msg.content) if msg.role == "user" else AIMessage(content=msg.content)
-        for msg in messages
-    ]
-    message_list.append(HumanMessage(content=chat_request.message))
-
-    # Process with agent
-    state = {
-        "user_id": chat_request.user_id,
-        "messages": message_list,
-        "memory_context": memory_context,
-        "response": ""
-    }
-
-    result_state = agent.invoke(state)
-    response = result_state["response"]
-
-    # Store message in database
-    user_msg = ChatMessage(user_id=user.id, role="user", content=chat_request.message)
-    assistant_msg = ChatMessage(user_id=user.id, role="assistant", content=response)
-
-    db.add(user_msg)
-    db.add(assistant_msg)
-    await db.commit()
-
-    # Extract and store facts from user message
-    facts = await MemoryService.extract_facts(chat_request.user_id, chat_request.message, db)
-    for fact in facts:
-        await MemoryService.store_fact(
-            chat_request.user_id,
-            fact["fact"],
-            fact.get("category", "other"),
-            db
-        )
-
-    return ChatResponse(response=response, user_id=chat_request.user_id)
+    try:
+        llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", google_api_key=os.getenv("GOOGLE_API_KEY"))
+        response = llm.invoke([HumanMessage(content=chat_request.message)])
+        return ChatResponse(response=response.content, user_id=chat_request.user_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/chat/history/{user_id}")
 @limiter.limit("30/minute")  # 30 requests per minute per IP
