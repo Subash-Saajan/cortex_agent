@@ -86,6 +86,7 @@ jobs:
             GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
             GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
             GOOGLE_REDIRECT_URI=https://api.cortex.subashsaajan.site/api/auth/callback
+            FRONTEND_URL=https://cortex.subashsaajan.site
             JWT_SECRET=${{ secrets.JWT_SECRET }}
 
       - name: Deploy Amazon ECS task definition
