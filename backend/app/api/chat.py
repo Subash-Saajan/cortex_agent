@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 from langchain_core.messages import HumanMessage, AIMessage
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -31,13 +31,13 @@ class ConversationResponse(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     user_id: str
-    conversation_id: str = None
+    conversation_id: Optional[str] = None
 
 class ChatResponse(BaseModel):
     response: str
     user_id: str
     conversation_id: str
-    title: str = None
+    title: Optional[str] = None
 
 async def get_or_create_user(user_id: str, db: AsyncSession) -> User:
     """Get or create user"""
@@ -78,14 +78,21 @@ async def chat(request: Request, chat_request: ChatRequest, db: AsyncSession = D
 
     # 1. Handle Conversation
     new_conversation = False
-    if not conv_id:
+    conv_uuid = None
+    
+    if conv_id:
+        try:
+            conv_uuid = uuid.UUID(conv_id)
+        except (ValueError, TypeError):
+            conv_uuid = None
+            
+    if not conv_uuid:
         conversation = Conversation(user_id=user_uuid, title="New Chat")
         db.add(conversation)
         await db.flush() # Get ID
-        conv_id = str(conversation.id)
+        conv_uuid = conversation.id
+        conv_id = str(conv_uuid)
         new_conversation = True
-    
-    conv_uuid = uuid.UUID(conv_id)
 
     # 2. Get history for this specific conversation
     stmt = select(ChatMessage).where(ChatMessage.conversation_id == conv_uuid).order_by(ChatMessage.created_at.asc())

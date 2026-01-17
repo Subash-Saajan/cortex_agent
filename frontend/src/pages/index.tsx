@@ -153,7 +153,12 @@ export default function Home() {
         setMessages(prev => [...prev, { role: 'assistant', content: responseText }])
       }
     } catch (err: any) {
-      const errorMsg = err.response?.data?.detail || 'I encountered an error connecting to the brain. Please try again.'
+      let errorMsg = 'I encountered an error connecting to the brain. Please try again.'
+      if (err.response?.data?.detail) {
+        errorMsg = typeof err.response.data.detail === 'string'
+          ? err.response.data.detail
+          : JSON.stringify(err.response.data.detail)
+      }
       setError(errorMsg)
       setMessages(prev => [...prev, { role: 'assistant', content: errorMsg }])
     } finally {
