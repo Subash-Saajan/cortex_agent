@@ -75,8 +75,16 @@ def draft_and_send_email(recipient: str, subject: str, body: str):
     """Draft and send an email to a recipient. Use professional tone."""
     pass
 
+@tool
+def create_calendar_event(title: str, start_time: str, end_time: str, description: str = "", location: str = ""):
+    """Create a new calendar event. 
+    Times must be in ISO format (YYYY-MM-DDTHH:MM:SSZ). 
+    IMPORTANT: Always confirm free time first using get_calendar_events.
+    """
+    pass
+
 # Define the tools list for the LLM
-tools = [search_emails, get_calendar_events, search_memory, save_memory, draft_and_send_email]
+tools = [search_emails, get_calendar_events, search_memory, save_memory, draft_and_send_email, create_calendar_event]
 llm_with_tools = get_llm().bind_tools(tools)
 
 # --- Nodes ---
@@ -143,6 +151,18 @@ async def execute_tools(state: AgentState):
                 content = args.get("body", "")
                 msg_id = await GmailService.send_email(state["user_id"], target, sub, content, state["db"])
                 result = f"Email sent successfully to {target}! Message ID: {msg_id}"
+            
+            elif tool_name == "create_calendar_event":
+                title = args.get("title")
+                start = args.get("start_time")
+                end = args.get("end_time")
+                desc = args.get("description", "")
+                loc = args.get("location", "")
+                
+                event_id = await CalendarService.create_event(
+                    state["user_id"], title, start, end, desc, loc, state["db"]
+                )
+                result = f"Successfully created calendar event: {title} (ID: {event_id})"
             
             else:
                 result = f"Unsupported tool: {tool_name}"
