@@ -24,6 +24,7 @@ export default function Home() {
   }, [error])
   const [draftEmail, setDraftEmail] = useState('')
   const [showDraft, setShowDraft] = useState(false)
+  const [calendarDraft, setCalendarDraft] = useState<{ title: string, date: string, time: string, description: string } | null>(null)
   const [userEmail, setUserEmail] = useState('')
   const [userName, setUserName] = useState('')
   const [conversations, setConversations] = useState<Array<{ id: string; title: string }>>([])
@@ -119,11 +120,13 @@ export default function Home() {
     setMessages([])
   }
 
-  const handleSendMessage = async () => {
-    if (!message.trim() || !userId) return
+  const handleSendMessage = async (overrideMsg?: string) => {
+    const finalMsg = overrideMsg || message
+    if (!finalMsg.trim() || !userId) return
 
-    const userMessage = message
-    setMessage('')
+    const userMessage = finalMsg
+    if (!overrideMsg) setMessage('')
+
     setMessages(prev => [...prev, { role: 'user', content: userMessage }])
     setLoading(true)
     setError('')
@@ -147,19 +150,31 @@ export default function Home() {
       }
 
       // Check if response contains a draft email format
-      // If it does, update the draft and keep showing the draft UI
-      if (responseText.includes('Subject:') && (responseText.includes('Body:') || responseText.length > 50)) {
-        setDraftEmail(responseText)
+      if (responseText.includes('--- DRAFT START ---')) {
+        const draftContent = responseText.split('--- DRAFT START ---')[1].split('--- DRAFT END ---')[0].trim()
+        setDraftEmail(draftContent)
         setShowDraft(true)
+        setCalendarDraft(null)
         setMessages(prev => [...prev, {
           role: 'assistant',
-          content: "I've updated the draft based on your request. You can review it below.",
+          content: "I've prepared a draft. You can edit it below or just ask me to send it.",
           draft: true
         }])
+      } else if (responseText.includes('--- CALENDAR START ---')) {
+        const calContent = responseText.split('--- CALENDAR START ---')[1].split('--- CALENDAR END ---')[0].trim()
+        const lines = calContent.split('\n')
+        const title = lines.find(l => l.startsWith('Title:'))?.split('Title:')[1]?.trim() || ''
+        const date = lines.find(l => l.startsWith('Date:'))?.split('Date:')[1]?.trim() || ''
+        const time = lines.find(l => l.startsWith('Time:'))?.split('Time:')[1]?.trim() || ''
+        const desc = lines.find(l => l.startsWith('Description:'))?.split('Description:')[1]?.trim() || ''
+
+        setCalendarDraft({ title, date, time, description: desc })
+        setShowDraft(false)
+        setMessages(prev => [...prev, { role: 'assistant', content: responseText }])
       } else {
         // If it's not a draft, hide the draft UI as the conversation moved on
         setShowDraft(false)
-        setDraftEmail('')
+        setCalendarDraft(null)
         setMessages(prev => [...prev, { role: 'assistant', content: responseText }])
       }
     } catch (err: any) {
@@ -446,6 +461,51 @@ export default function Home() {
                 </div>
               </div>
             )}
+
+            {calendarDraft && !loading && (
+              <div className="draft-card animate-slide-up" style={{
+                border: '1px solid #10b981',
+                boxShadow: '0 0 20px rgba(16, 185, 129, 0.2)',
+              }}>
+                <div className="draft-header">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div className="pulse-dot" style={{ background: '#10b981' }}></div>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                      <line x1="16" y1="2" x2="16" y2="6"></line>
+                      <line x1="8" y1="2" x2="8" y2="6"></line>
+                      <line x1="3" y1="10" x2="21" y2="10"></line>
+                    </svg>
+                    <span style={{ color: '#10b981' }}>Confirm Calendar Event</span>
+                  </div>
+                </div>
+                <div style={{ padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', margin: '12px 0' }}>
+                  <div style={{ marginBottom: '8px' }}><strong>Title:</strong> {calendarDraft.title}</div>
+                  <div style={{ marginBottom: '8px' }}><strong>Date:</strong> {calendarDraft.date}</div>
+                  <div style={{ marginBottom: '8px' }}><strong>Time:</strong> {calendarDraft.time} (IST)</div>
+                  {calendarDraft.description && <div><strong>Note:</strong> {calendarDraft.description}</div>}
+                </div>
+                <div className="draft-actions">
+                  <button
+                    onClick={() => {
+                      handleSendMessage('Yes, go ahead and add it.');
+                      setCalendarDraft(null);
+                    }}
+                    className="btn-send"
+                    style={{ flex: 1, height: '48px', fontSize: '1rem', background: '#10b981' }}
+                  >
+                    Confirm & Add to Calendar
+                  </button>
+                  <button
+                    onClick={() => setCalendarDraft(null)}
+                    className="btn-secondary"
+                    style={{ padding: '0 24px' }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </main>
         </div>
@@ -471,7 +531,7 @@ export default function Home() {
           />
           <button
             className="btn-send"
-            onClick={handleSendMessage}
+            onClick={() => handleSendMessage()}
             disabled={loading || !message.trim()}
           >
             {loading ? '...' : 'Send'}
