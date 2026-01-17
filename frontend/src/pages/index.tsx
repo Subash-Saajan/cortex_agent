@@ -127,26 +127,16 @@ export default function Home() {
       setLoading(true)
 
       // Extract data from draft
-      const toMatch = draftEmail.match(/To:\s*([^\n]+)/i)
+      const toMatch = draftEmail.match(/To:\s*([^\n]+)/i) || draftEmail.match(/to\s+([^\s]+@[^\s]+)/i)
       const subMatch = draftEmail.match(/Subject:\s*([^\n]+)/i)
-      const bodyMatch = draftEmail.split(/Body:\s*/i)[1]
 
-      const to = toMatch ? toMatch[1].trim() : (draftEmail.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/)?.[0] || 'recipient@example.com')
+      const to = toMatch ? toMatch[1].trim() : 'recipient@example.com'
       const subject = subMatch ? subMatch[1].trim() : 'No Subject'
-
-      let body = bodyMatch ? bodyMatch.trim() : draftEmail
+      const body = draftEmail
         .replace(/To:.+/i, '')
         .replace(/Subject:.+/i, '')
         .replace(/Body:.+/i, '')
         .trim()
-
-      // If body is still empty or just contain labels, use the whole thing but strip labels
-      if (body.length < 10) {
-        body = draftEmail
-          .replace(/To:\s*[^\n]+/i, '')
-          .replace(/Subject:\s*[^\n]+/i, '')
-          .trim()
-      }
 
       await axios.post(`${BACKEND_URL}/api/gmail/send`, {
         user_id: userId,
