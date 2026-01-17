@@ -33,8 +33,10 @@ jobs:
           filters: |
             backend:
               - 'backend/**'
+              - '.github/workflows/deploy.yml'
             frontend:
               - 'frontend/**'
+              - '.github/workflows/deploy.yml'
 
   deploy-backend:
     needs: changes
