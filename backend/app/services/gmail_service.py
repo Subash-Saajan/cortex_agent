@@ -81,10 +81,11 @@ class GmailService:
 
                 email_list.append({
                     "id": msg["id"],
+                    "thread_id": msg["threadId"],
                     "subject": subject,
                     "from": sender,
                     "date": date,
-                    "preview": body[:200] + "..." if len(body) > 200 else body
+                    "preview": body[:300] + "..." if len(body) > 300 else body
                 })
 
             return email_list
@@ -92,20 +93,36 @@ class GmailService:
         except Exception as e:
             raise ValueError(f"Error fetching inbox: {str(e)}")
 
-    @staticmethod
-    async def send_email(user_id: str, to: str, subject: str, body: str, db: AsyncSession) -> str:
-        """Send an email"""
+    async def send_email(user_id: str, to: str, subject: str, body: str, db: AsyncSession, thread_id: str = None) -> str:
+        """Send an email, supporting threading"""
         try:
             from email.mime.text import MIMEText
-
             service = await GmailService.get_service(user_id, db)
 
             message = MIMEText(body)
             message["to"] = to
             message["subject"] = subject
 
+            # If replying, set proper headers
+            if thread_id:
+                try:
+                    orig_msg = service.users().messages().get(userId="me", id=thread_id).execute()
+                    orig_headers = orig_msg["payload"]["headers"]
+                    msg_id_val = next((h["value"] for h in orig_headers if h["name"].lower() == "message-id"), None)
+                    
+                    if msg_id_val:
+                        message["In-Reply-To"] = msg_id_val
+                        message["References"] = msg_id_val
+                    
+                    if not subject.lower().startswith("re:"):
+                        message["subject"] = "Re: " + subject
+                except Exception as e:
+                    print(f"Threading error (proceeding as new mail): {e}")
+
             raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
             send_message = {"raw": raw}
+            if thread_id:
+                send_message["threadId"] = thread_id
 
             result = service.users().messages().send(
                 userId="me",

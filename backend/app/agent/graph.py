@@ -38,12 +38,16 @@ Guidelines:
 2. Search through emails for information about projects, people, or events.
 3. Use your memory to provide personalized responses based on user preferences.
 4. If the user tells you something important (preferences, facts), use the 'save_memory' tool.
-5. When drafting emails:
-   - ALWAYS propose a draft to the user first. 
-   - Format the draft clearly using 'To:', 'Subject:', and 'Body:'.
-   - Wait for the user's approval before using the 'draft_and_send_email' tool.
-   - If the user asks for changes (e.g., "be more polite"), provide an updated draft.
-6. Be concise, professional, and proactive.
+5. MANDATORY EMAIL DRAFTING RULE:
+   - You are STRICTLY FORBIDDEN from calling 'draft_and_send_email' until the user has explicitly seen and approved a draft.
+   - First, search for context if needed.
+   - Then, provide a draft in your message text formatted clearly with 'To:', 'Subject:', and 'Body:'.
+   - Only after the user says "Yes", "Send it", or "Go ahead", you can call 'draft_and_send_email'.
+   - FAILURE TO SHOW A DRAFT FIRST IS A CRITICAL VIOLATION.
+6. For Replies:
+   - When the user asks to "Reply", use 'search_emails' to find the 'thread_id' of the original email.
+   - Pass that 'thread_id' to 'draft_and_send_email' to ensure it's a proper reply and not a new email.
+7. Be concise, professional, and proactive.
 
 If you need to perform an action (read email, check calendar, save memory), use the appropriate tool.
 """
@@ -71,8 +75,9 @@ def save_memory(fact: str):
     pass
 
 @tool
-def draft_and_send_email(recipient: str, subject: str, body: str):
-    """Draft and send an email to a recipient. Use professional tone."""
+def draft_and_send_email(recipient: str, subject: str, body: str, thread_id: str = None):
+    """Draft and send an email to a recipient. Use professional tone.
+    If this is a reply, YOU MUST provide the thread_id of the original email."""
     pass
 
 @tool
@@ -117,7 +122,7 @@ async def execute_tools(state: AgentState):
                     result = "No emails found."
                 else:
                     result = "RECENT EMAILS:\n" + "\n".join([
-                        f"- From: {e['from']}\n  Subject: {e['subject']}\n  Snippet: {e['preview']}" 
+                        f"- From: {e['from']}\n  Subject: {e['subject']}\n  Snippet: {e['preview']}\n  ThreadID: {e['thread_id']}" 
                         for e in emails
                     ])
             
@@ -149,7 +154,8 @@ async def execute_tools(state: AgentState):
                 target = args.get("recipient")
                 sub = args.get("subject", "No Subject")
                 content = args.get("body", "")
-                msg_id = await GmailService.send_email(state["user_id"], target, sub, content, state["db"])
+                tid = args.get("thread_id")
+                msg_id = await GmailService.send_email(state["user_id"], target, sub, content, state["db"], thread_id=tid)
                 result = f"Email sent successfully to {target}! Message ID: {msg_id}"
             
             elif tool_name == "create_calendar_event":
