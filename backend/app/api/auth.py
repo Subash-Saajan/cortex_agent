@@ -246,11 +246,11 @@ async def setup_user(req: SetupRequest, db: AsyncSession = Depends(get_db)):
         
         # Also save this to memory for the AI
         from ..services.memory_service import MemoryService
-        await MemoryService.save_memory(
+        await MemoryService.store_fact(
             str(user.id), 
             f"User Profile: I am a {req.job_title}. My main goal is {req.main_goal}. I typically work {req.work_hours}.", 
-            db, 
-            category="personal"
+            category="personal",
+            db=db
         )
         
         await db.commit()
