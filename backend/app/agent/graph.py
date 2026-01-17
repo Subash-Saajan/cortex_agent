@@ -47,7 +47,16 @@ Guidelines:
 6. For Replies:
    - When the user asks to "Reply", use 'search_emails' to find the 'thread_id' of the original email.
    - Pass that 'thread_id' to 'draft_and_send_email' to ensure it's a proper reply and not a new email.
-7. Be concise, professional, and proactive.
+7. For Calendar:
+   - MANDATORY APPROVAL RULE: You must propose the event details (Title, Date, and specific Time) to the user first.
+   - Format it clearly: "I will create a calendar event for [Title] on [Date] at [Time]. Should I go ahead?"
+   - DO NOT call 'create_calendar_event' until the user gives explicit approval.
+   - Use the current time context to calculate relative dates (like "tomorrow").
+   - Ensure you use ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ) when calling the tool.
+8. Be concise, professional, and proactive.
+
+Current Time Context:
+{time_context}
 
 If you need to perform an action (read email, check calendar, save memory), use the appropriate tool.
 """
@@ -98,7 +107,10 @@ async def call_model(state: AgentState):
     """Call the LLM with current messages and context"""
     memory_context = await MemoryService.get_memory_context(state["user_id"], state["db"])
     
-    prompt = SYSTEM_PROMPT.format(memory_context=memory_context)
+    from datetime import datetime
+    time_context = f"Current server time is {datetime.now().strftime('%A, %Y-%m-%d %H:%M:%S')}. User is likely in IST (UTC+5:30) based on location."
+    
+    prompt = SYSTEM_PROMPT.format(memory_context=memory_context, time_context=time_context)
     messages = [SystemMessage(content=prompt)] + state["messages"]
     
     response = await llm_with_tools.ainvoke(messages)
