@@ -176,7 +176,7 @@ async def execute_tools(state: AgentState):
         except Exception as e:
             result = f"Error executing {tool_name}: {str(e)}"
             
-        tool_messages.append(ToolMessage(content=result, tool_call_id=call_id))
+        tool_messages.append(ToolMessage(content=result, tool_call_id=call_id, name=tool_name))
     
     return {"messages": tool_messages}
 
