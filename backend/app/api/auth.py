@@ -35,6 +35,13 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     user_id: str
     email: str
+    is_setup_complete: bool = False
+
+class SetupRequest(BaseModel):
+    user_id: str
+    job_title: str
+    main_goal: str
+    work_hours: str
 
 def create_access_token(user_id: str, email: str, expires_delta: timedelta = None):
     """Create JWT access token"""
@@ -174,7 +181,7 @@ async def callback(code: str = Query(...), db: AsyncSession = Depends(get_db)):
         access_token = create_access_token(str(user.id), user.email)
 
         # Build redirect URL with query parameters
-        redirect_url = f"{FRONTEND_URL}?token={access_token}&user_id={str(user.id)}"
+        redirect_url = f"{FRONTEND_URL}?token={access_token}&user_id={str(user.id)}&is_setup_complete={1 if user.is_setup_complete else 0}"
         
         # Check if user has valid refresh token for API access
         if not user.refresh_token:
@@ -215,7 +222,38 @@ async def get_user(user_id: str, db: AsyncSession = Depends(get_db)):
         return {
             "id": str(user.id),
             "email": user.email,
-            "name": user.name
+            "name": user.name,
+            "is_setup_complete": bool(user.is_setup_complete)
         }
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid user_id format")
+
+@router.post("/setup")
+async def setup_user(req: SetupRequest, db: AsyncSession = Depends(get_db)):
+    """Complete user account setup"""
+    try:
+        stmt = select(User).where(User.id == uuid.UUID(req.user_id))
+        result = await db.execute(stmt)
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+            
+        user.job_title = req.job_title
+        user.main_goal = req.main_goal
+        user.work_hours = req.work_hours
+        user.is_setup_complete = 1
+        
+        # Also save this to memory for the AI
+        from ..services.memory_service import MemoryService
+        await MemoryService.save_memory(
+            str(user.id), 
+            f"User Profile: I am a {req.job_title}. My main goal is {req.main_goal}. I typically work {req.work_hours}.", 
+            db, 
+            category="personal"
+        )
+        
+        await db.commit()
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

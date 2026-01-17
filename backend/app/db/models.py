@@ -13,6 +13,10 @@ class User(Base):
     name = Column(String(255))
     google_id = Column(String(255), unique=True)
     refresh_token = Column(Text, nullable=True)
+    is_setup_complete = Column(Integer, default=0)  # 0 for false, 1 for true
+    job_title = Column(String(255), nullable=True)
+    main_goal = Column(Text, nullable=True)
+    work_hours = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

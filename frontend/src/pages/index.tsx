@@ -29,6 +29,12 @@ export default function Home() {
   const [userName, setUserName] = useState('')
   const [conversations, setConversations] = useState<Array<{ id: string; title: string }>>([])
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null)
+  const [isSetupComplete, setIsSetupComplete] = useState(true) // Default true to avoid flicker for old users
+  useEffect(() => {
+    const storedSetup = localStorage.getItem('isSetupComplete')
+    if (storedSetup === '0') setIsSetupComplete(false)
+  }, [])
+  const [setupData, setSetupData] = useState({ job_title: '', main_goal: '', work_hours: '' })
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -42,7 +48,7 @@ export default function Home() {
 
   useEffect(() => {
     // Check for auth token in URL (OAuth callback)
-    const { token, user_id, warning, error } = router.query
+    const { token, user_id, warning, error, is_setup_complete } = router.query
     if (error) {
       setError(decodeURIComponent(error as string))
     }
@@ -54,13 +60,21 @@ export default function Home() {
       localStorage.setItem('userId', user_id as string)
       setIsLoggedIn(true)
       setUserId(user_id as string)
+
+      const setupDone = is_setup_complete === '1'
+      setIsSetupComplete(setupDone)
+      localStorage.setItem('isSetupComplete', setupDone ? '1' : '0')
+
       router.replace('/')
     } else {
       const storedToken = localStorage.getItem('token')
       const storedUserId = localStorage.getItem('userId')
+      const storedSetup = localStorage.getItem('isSetupComplete')
+
       if (storedToken && storedUserId) {
         setIsLoggedIn(true)
         setUserId(storedUserId)
+        setIsSetupComplete(storedSetup === '1')
 
         // Fetch user info
         fetch(`${BACKEND_URL}/api/auth/user/${storedUserId}`)
@@ -68,6 +82,10 @@ export default function Home() {
           .then(data => {
             setUserEmail(data.email || '')
             setUserName(data.name || '')
+            if (data.is_setup_complete !== undefined) {
+              setIsSetupComplete(data.is_setup_complete)
+              localStorage.setItem('isSetupComplete', data.is_setup_complete ? '1' : '0')
+            }
           })
           .catch(() => { })
 
@@ -118,6 +136,28 @@ export default function Home() {
     setIsLoggedIn(false)
     setUserId('')
     setMessages([])
+  }
+
+  const handleUpdateSetup = async () => {
+    if (!setupData.job_title || !setupData.main_goal || !setupData.work_hours) {
+      setError('Please fill in all details to proceed.')
+      return
+    }
+    setLoading(true)
+    try {
+      await axios.post(`${BACKEND_URL}/api/auth/setup`, {
+        user_id: userId,
+        ...setupData
+      })
+      setIsSetupComplete(true)
+      localStorage.setItem('isSetupComplete', '1')
+      // Refresh chat or show welcome message
+      setMessages([{ role: 'assistant', content: `Welcome aboard, ${userName}! I've noted that you're a ${setupData.job_title} and your main goal is ${setupData.main_goal}. How can I assist you with your emails or calendar today?` }])
+    } catch (err) {
+      setError('Failed to save setup details. Please try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleSendMessage = async (overrideMsg?: string) => {
@@ -322,6 +362,63 @@ export default function Home() {
               Continue with Google
             </button>
             {error && <p style={{ color: '#ef4444', marginTop: '20px', fontSize: '0.9rem' }}>{error}</p>}
+          </div>
+        </div>
+      </>
+    )
+  }
+  if (!isSetupComplete && isLoggedIn) {
+    return (
+      <>
+        <div className="bg-mesh" />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '20px', position: 'relative', zIndex: 10 }}>
+          <div className="glass-card animate-slide-up" style={{ maxWidth: '600px', width: '100%', padding: '40px' }}>
+            <h2 style={{ fontSize: '2rem', marginBottom: '8px' }}>Welcome, {userName || 'Chief'}! 🥂</h2>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '32px' }}>Let's personalize your experience. These details help Cortex serve you better.</p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>What is your job title or primary role?</label>
+                <input
+                  className="input-field"
+                  value={setupData.job_title}
+                  onChange={e => setSetupData({ ...setupData, job_title: e.target.value })}
+                  placeholder="e.g. Founder, Software Engineer, Student"
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>What is your main goal for using Cortex?</label>
+                <textarea
+                  className="input-field"
+                  style={{ minHeight: '100px', padding: '12px', resize: 'none' }}
+                  value={setupData.main_goal}
+                  onChange={e => setSetupData({ ...setupData, main_goal: e.target.value })}
+                  placeholder="e.g. Organize my chaotic inbox and stay ahead of calendar invites."
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>What are your typical work hours?</label>
+                <input
+                  className="input-field"
+                  value={setupData.work_hours}
+                  onChange={e => setSetupData({ ...setupData, work_hours: e.target.value })}
+                  placeholder="e.g. 10 AM to 6 PM IST"
+                />
+              </div>
+
+              <button
+                className="btn-send"
+                onClick={handleUpdateSetup}
+                disabled={loading}
+                style={{ marginTop: '16px', height: '56px', fontSize: '1.1rem', width: '100%' }}
+              >
+                {loading ? 'Setting up...' : 'Get Started'}
+              </button>
+
+              {error && <p style={{ color: '#ef4444', textAlign: 'center', fontSize: '0.9rem' }}>{error}</p>}
+            </div>
           </div>
         </div>
       </>

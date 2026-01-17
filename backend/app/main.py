@@ -49,18 +49,15 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"Migration error (conversation_id): {e}")
 
-        # 5. Handle Vector dimension change (from 1536 to 768)
+        # 6. User setup details migration
         try:
-            # Drop and recreate embeddings table if dimension is wrong to avoid mismatches
-            # In a real prod app we'd be more careful, but for this demo it's best to be clean.
-            result = await conn.execute(text("SELECT atttypmod FROM pg_attribute WHERE attrelid = 'memory_embeddings'::regclass AND attname = 'embedding'"))
-            row = result.fetchone()
-            if row and row[0] != 768:
-                logger.info(f"Vector dimension mismatch (found {row[0]}, expected 768). Recreating table...")
-                await conn.execute(text("DROP TABLE IF EXISTS memory_embeddings CASCADE"))
-        except Exception:
-            # Table might not exist yet, create_all will handle it
-            pass
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_setup_complete INTEGER DEFAULT 0"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS job_title VARCHAR(255)"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS main_goal TEXT"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS work_hours VARCHAR(255)"))
+            logger.info("Checked user setup columns")
+        except Exception as e:
+            logger.error(f"Migration error (user columns): {e}")
 
         # Sync all models
         await conn.run_sync(Base.metadata.create_all)
