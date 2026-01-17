@@ -372,7 +372,7 @@ export default function Home() {
       <>
         <div className="bg-mesh" />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '20px', position: 'relative', zIndex: 10 }}>
-          <div className="glass-card animate-slide-up" style={{ maxWidth: '600px', width: '100%', padding: '40px' }}>
+          <div className="glass-card onboarding-card animate-slide-up">
             <h2 style={{ fontSize: '2rem', marginBottom: '8px' }}>Welcome, {userName || 'Chief'}! 🥂</h2>
             <p style={{ color: 'var(--text-muted)', marginBottom: '32px' }}>Let's personalize your experience. These details help Cortex serve you better.</p>
 
@@ -444,8 +444,8 @@ export default function Home() {
           </div>
         </header>
 
-        <div style={{ display: 'flex', flex: 1, gap: '20px', minHeight: 0 }}>
-          <aside className="glass-card" style={{ width: '280px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto' }}>
+        <div className="chat-layout" style={{ display: 'flex', flex: 1, gap: '20px', minHeight: 0 }}>
+          <aside className="glass-card sidebar" style={{ width: '280px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto' }}>
             <button
               onClick={handleNewChat}
               className="btn-send"
@@ -460,7 +460,7 @@ export default function Home() {
 
             <div style={{ flex: 1 }}>
               <h3 style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '12px' }}>Recent Chats</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div className="history-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {conversations.map((conv) => (
                   <button
                     key={conv.id}
