@@ -16,6 +16,8 @@ export default function Home() {
   const [showDraft, setShowDraft] = useState(false)
   const [userEmail, setUserEmail] = useState('')
   const [userName, setUserName] = useState('')
+  const [conversations, setConversations] = useState<Array<{ id: string; title: string }>>([])
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -58,17 +60,37 @@ export default function Home() {
           })
           .catch(() => { })
 
-        // Fetch chat history
-        axios.get(`${BACKEND_URL}/api/chat/history/${storedUserId}`)
+        // Fetch conversations
+        axios.get(`${BACKEND_URL}/api/conversations/${storedUserId}`)
           .then(res => {
             if (res.data && Array.isArray(res.data)) {
-              setMessages(res.data)
+              setConversations(res.data)
+              // If there's at least one conversation, load the first one by default
+              if (res.data.length > 0) {
+                const latest = res.data[0]
+                setCurrentConversationId(latest.id)
+                loadConversationHistory(latest.id)
+              }
             }
           })
-          .catch(err => console.error("Failed to fetch history:", err))
+          .catch(err => console.error("Failed to fetch conversations:", err))
       }
     }
   }, [router])
+
+  const loadConversationHistory = async (convId: string) => {
+    try {
+      setLoading(true)
+      const res = await axios.get(`${BACKEND_URL}/api/chat/history/${convId}`)
+      if (res.data && Array.isArray(res.data)) {
+        setMessages(res.data)
+      }
+    } catch (err) {
+      console.error("Failed to fetch history:", err)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleLogin = async () => {
     try {
@@ -100,10 +122,19 @@ export default function Home() {
     try {
       const response = await axios.post(`${BACKEND_URL}/api/chat`, {
         message: userMessage,
-        user_id: userId
+        user_id: userId,
+        conversation_id: currentConversationId
       })
 
       const responseText = response.data.response
+      const newConvId = response.data.conversation_id
+      const newTitle = response.data.title
+
+      if (!currentConversationId) {
+        setCurrentConversationId(newConvId)
+        // Add to conversations list with generated title
+        setConversations(prev => [{ id: newConvId, title: newTitle || 'New Chat' }, ...prev])
+      }
 
       // Check if response contains a draft email format
       // If it does, update the draft and keep showing the draft UI
@@ -187,10 +218,18 @@ export default function Home() {
   }
 
   const handleNewChat = () => {
-    if (messages.length > 0 && !window.confirm("Start a new chat? This will clear the current screen (but your history is saved).")) return
+    setCurrentConversationId(null)
     setMessages([])
     setShowDraft(false)
     setDraftEmail('')
+  }
+
+  const handleSwitchConversation = (convId: string) => {
+    if (convId === currentConversationId) return
+    setCurrentConversationId(convId)
+    setShowDraft(false)
+    setDraftEmail('')
+    loadConversationHistory(convId)
   }
 
   if (!isLoggedIn) {
@@ -279,14 +318,18 @@ export default function Home() {
             </button>
 
             <div style={{ flex: 1 }}>
-              <h3 style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '12px' }}>Recent Messages</h3>
+              <h3 style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '12px' }}>Recent Chats</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {messages.length > 0 && messages.filter(m => m.role === 'user').slice(-8).reverse().map((m, idx) => (
-                  <div key={idx} className="history-item" onClick={() => setMessage(m.content)} title="Click to reuse message">
-                    {m.content}
-                  </div>
+                {conversations.map((conv) => (
+                  <button
+                    key={conv.id}
+                    className={`history-item ${currentConversationId === conv.id ? 'active' : ''}`}
+                    onClick={() => handleSwitchConversation(conv.id)}
+                  >
+                    {conv.title}
+                  </button>
                 ))}
-                {messages.length === 0 && <p style={{ fontSize: '0.8rem', opacity: 0.5, textAlign: 'center', marginTop: '20px' }}>No history yet</p>}
+                {conversations.length === 0 && <p style={{ fontSize: '0.8rem', opacity: 0.5, textAlign: 'center', marginTop: '20px' }}>No history yet</p>}
               </div>
             </div>
 

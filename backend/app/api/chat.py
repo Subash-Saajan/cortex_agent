@@ -19,17 +19,25 @@ MAX_CONVERSATION_LENGTH = 100
 
 conversation_histories = {}
 
+class MessageHistory(BaseModel):
+    role: str
+    content: str
+
+class ConversationResponse(BaseModel):
+    id: str
+    title: str
+    created_at: str
+
 class ChatRequest(BaseModel):
     message: str
     user_id: str
+    conversation_id: str = None
 
 class ChatResponse(BaseModel):
     response: str
     user_id: str
-
-class MessageHistory(BaseModel):
-    role: str
-    content: str
+    conversation_id: str
+    title: str = None
 
 async def get_or_create_user(user_id: str, db: AsyncSession) -> User:
     """Get or create user"""
@@ -53,53 +61,78 @@ async def get_or_create_user(user_id: str, db: AsyncSession) -> User:
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: Request, chat_request: ChatRequest, db: AsyncSession = Depends(get_db)):
-    """Chat endpoint using the intelligent LangGraph agent with conversation memory"""
-
+    """Chat endpoint using the intelligent LangGraph agent with multi-conversation support"""
     from ..agent.graph import run_agent
-    from ..db.models import ChatMessage
+    from ..db.models import ChatMessage, Conversation
+    from sqlalchemy import select, update
     import uuid
 
     user_id = chat_request.user_id
     message = chat_request.message
-
-    if user_id not in conversation_histories:
-        # Try to load from DB if not in memory
-        from sqlalchemy import select
-        try:
-            user_uuid = uuid.UUID(user_id)
-        except ValueError:
-            user_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, user_id)
-        
-        stmt = select(ChatMessage).where(ChatMessage.user_id == user_uuid).order_by(ChatMessage.created_at.desc()).limit(20)
-        result = await db.execute(stmt)
-        db_messages = result.scalars().all()
-        
-        history = deque(maxlen=MAX_CONVERSATION_LENGTH)
-        # Reverse because we want oldest first for deque
-        for msg in reversed(db_messages):
-            history.append({"role": msg.role, "content": msg.content})
-        conversation_histories[user_id] = history
-
-    conversation_histories[user_id].append({"role": "user", "content": message})
+    conv_id = chat_request.conversation_id
 
     try:
-        response_text = await run_agent(user_id, message, db, list(conversation_histories[user_id]))
+        user_uuid = uuid.UUID(user_id)
+    except ValueError:
+        user_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, user_id)
 
-        conversation_histories[user_id].append({"role": "assistant", "content": response_text})
+    # 1. Handle Conversation
+    new_conversation = False
+    if not conv_id:
+        conversation = Conversation(user_id=user_uuid, title="New Chat")
+        db.add(conversation)
+        await db.flush() # Get ID
+        conv_id = str(conversation.id)
+        new_conversation = True
+    
+    conv_uuid = uuid.UUID(conv_id)
 
-        try:
-            user_uuid = uuid.UUID(user_id)
-        except ValueError:
-            user_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, user_id)
+    # 2. Get history for this specific conversation
+    stmt = select(ChatMessage).where(ChatMessage.conversation_id == conv_uuid).order_by(ChatMessage.created_at.asc())
+    result = await db.execute(stmt)
+    db_messages = result.scalars().all()
+    
+    history = []
+    for msg in db_messages:
+        history.append({"role": msg.role, "content": msg.content})
+    
+    # 3. Add current message to history for agent
+    history.append({"role": "user", "content": message})
 
-        user_msg = ChatMessage(user_id=user_uuid, role="user", content=message)
-        ai_msg = ChatMessage(user_id=user_uuid, role="assistant", content=response_text)
+    try:
+        # 4. Run Agent
+        response_text = await run_agent(user_id, message, db, history)
+
+        # 5. Save Messages to DB
+        user_msg = ChatMessage(user_id=user_uuid, conversation_id=conv_uuid, role="user", content=message)
+        ai_msg = ChatMessage(user_id=user_uuid, conversation_id=conv_uuid, role="assistant", content=response_text)
         
         db.add(user_msg)
         db.add(ai_msg)
+
+        # 6. Auto-generate title if it's a new conversation
+        generated_title = None
+        if new_conversation:
+            try:
+                from langchain_google_genai import ChatGoogleGenerativeAI
+                llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", google_api_key=os.getenv("GOOGLE_API_KEY"))
+                title_prompt = f"Based on this first message: '{message}', generate a short 3-4 word title for the conversation. Return ONLY the title text, no quotes or prefix."
+                title_res = await llm.ainvoke(title_prompt)
+                generated_title = title_res.content.strip()
+                if generated_title:
+                    stmt = update(Conversation).where(Conversation.id == conv_uuid).values(title=generated_title)
+                    await db.execute(stmt)
+            except Exception as e:
+                print(f"Title generation error: {e}")
+
         await db.commit()
 
-        return ChatResponse(response=response_text, user_id=user_id)
+        return ChatResponse(
+            response=response_text, 
+            user_id=user_id, 
+            conversation_id=conv_id,
+            title=generated_title
+        )
         
     except Exception as e:
         import traceback
@@ -130,18 +163,41 @@ async def chat(request: Request, chat_request: ChatRequest, db: AsyncSession = D
                 
         raise HTTPException(status_code=500, detail=f"Agent Error: {str(e)}")
 
-@router.get("/chat/history/{user_id}")
-@limiter.limit("30/minute")  # 30 requests per minute per IP
-async def get_chat_history(request: Request, user_id: str, db: AsyncSession = Depends(get_db)):
-    """Get chat history for user - Rate limited"""
+@router.get("/conversations/{user_id}", response_model=List[ConversationResponse])
+async def get_conversations(user_id: str, db: AsyncSession = Depends(get_db)):
+    """Get all conversations for a user"""
     from sqlalchemy import select
+    from ..db.models import Conversation
 
     try:
         user_uuid = uuid.UUID(user_id)
     except ValueError:
         user_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, user_id)
 
-    stmt = select(ChatMessage).where(ChatMessage.user_id == user_uuid).order_by(ChatMessage.created_at)
+    stmt = select(Conversation).where(Conversation.user_id == user_uuid).order_by(Conversation.updated_at.desc())
+    result = await db.execute(stmt)
+    conversations = result.scalars().all()
+
+    return [
+        ConversationResponse(
+            id=str(c.id),
+            title=c.title,
+            created_at=c.created_at.isoformat()
+        )
+        for c in conversations
+    ]
+
+@router.get("/chat/history/{conversation_id}", response_model=List[MessageHistory])
+async def get_conversation_history(conversation_id: str, db: AsyncSession = Depends(get_db)):
+    """Get message history for a specific conversation"""
+    from sqlalchemy import select
+    
+    try:
+        conv_uuid = uuid.UUID(conversation_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid conversation ID")
+
+    stmt = select(ChatMessage).where(ChatMessage.conversation_id == conv_uuid).order_by(ChatMessage.created_at)
     result = await db.execute(stmt)
     messages = result.scalars().all()
 
@@ -152,30 +208,32 @@ async def get_chat_history(request: Request, user_id: str, db: AsyncSession = De
 
 @router.delete("/chat/history/{user_id}")
 async def clear_chat_history(user_id: str, db: AsyncSession = Depends(get_db)):
-    """Clear chat history for user"""
+    """Clear all chat history for user (all conversations and messages)"""
     from sqlalchemy import delete
+    from ..db.models import Conversation, ChatMessage
     
     try:
         user_uuid = uuid.UUID(user_id)
     except ValueError:
         user_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, user_id)
 
-    # Delete from DB
-    stmt = delete(ChatMessage).where(ChatMessage.user_id == user_uuid)
-    await db.execute(stmt)
+    # 1. Delete all chat messages for this user
+    stmt1 = delete(ChatMessage).where(ChatMessage.user_id == user_uuid)
+    await db.execute(stmt1)
+
+    # 2. Delete all conversations for this user
+    stmt2 = delete(Conversation).where(Conversation.user_id == user_uuid)
+    await db.execute(stmt2)
+
     await db.commit()
 
-    # Clear from memory
-    if user_id in conversation_histories:
-        conversation_histories[user_id].clear()
-
-    return {"status": "success", "message": "Chat history cleared"}
+    return {"status": "success", "message": "All chat history cleared"}
 
 @router.delete("/user/data/{user_id}")
 async def delete_all_user_data(user_id: str, db: AsyncSession = Depends(get_db)):
-    """Delete all data for user (Chat + Memory)"""
+    """Delete all data for user (Chat + Memory + Conversations)"""
     from sqlalchemy import delete
-    from ..db.models import MemoryFact, MemoryEmbedding
+    from ..db.models import MemoryFact, MemoryEmbedding, Conversation, ChatMessage
     
     try:
         user_uuid = uuid.UUID(user_id)
@@ -186,7 +244,11 @@ async def delete_all_user_data(user_id: str, db: AsyncSession = Depends(get_db))
     stmt1 = delete(ChatMessage).where(ChatMessage.user_id == user_uuid)
     await db.execute(stmt1)
 
-    # 2. Delete Memory Embeddings (linked to facts)
+    # 2. Delete Conversations
+    stmt_conv = delete(Conversation).where(Conversation.user_id == user_uuid)
+    await db.execute(stmt_conv)
+
+    # 3. Delete Memory Embeddings (linked to facts)
     # We first find fact IDs for this user
     from sqlalchemy import select
     fact_ids_stmt = select(MemoryFact.id).where(MemoryFact.user_id == user_uuid)
@@ -197,14 +259,10 @@ async def delete_all_user_data(user_id: str, db: AsyncSession = Depends(get_db))
         stmt2 = delete(MemoryEmbedding).where(MemoryEmbedding.memory_fact_id.in_(fact_ids))
         await db.execute(stmt2)
 
-    # 3. Delete Memory Facts
+    # 4. Delete Memory Facts
     stmt3 = delete(MemoryFact).where(MemoryFact.user_id == user_uuid)
     await db.execute(stmt3)
 
     await db.commit()
-
-    # Clear from memory
-    if user_id in conversation_histories:
-        conversation_histories[user_id].clear()
 
     return {"status": "success", "message": "All user data deleted"}

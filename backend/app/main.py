@@ -36,13 +36,20 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"Migration error (metadata_json): {e}")
 
-        # 2. Add updated_at if missing
+        # 3. Add updated_at if missing
         try:
             await conn.execute(text("ALTER TABLE memory_facts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"))
         except Exception as e:
             logger.error(f"Migration error (updated_at): {e}")
 
-        # 3. Handle Vector dimension change (from 1536 to 768)
+        # 4. Ensure conversation_id column exists in chat_messages
+        try:
+            await conn.execute(text("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS conversation_id UUID"))
+            logger.info("Checked chat_messages.conversation_id")
+        except Exception as e:
+            logger.error(f"Migration error (conversation_id): {e}")
+
+        # 5. Handle Vector dimension change (from 1536 to 768)
         try:
             # Drop and recreate embeddings table if dimension is wrong to avoid mismatches
             # In a real prod app we'd be more careful, but for this demo it's best to be clean.
