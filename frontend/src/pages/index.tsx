@@ -48,6 +48,7 @@ export default function Home() {
       if (storedToken && storedUserId) {
         setIsLoggedIn(true)
         setUserId(storedUserId)
+
         // Fetch user info
         fetch(`${BACKEND_URL}/api/auth/user/${storedUserId}`)
           .then(res => res.json())
@@ -56,6 +57,15 @@ export default function Home() {
             setUserName(data.name || '')
           })
           .catch(() => { })
+
+        // Fetch chat history
+        axios.get(`${BACKEND_URL}/api/chat/history/${storedUserId}`)
+          .then(res => {
+            if (res.data && Array.isArray(res.data)) {
+              setMessages(res.data)
+            }
+          })
+          .catch(err => console.error("Failed to fetch history:", err))
       }
     }
   }, [router])
@@ -155,6 +165,34 @@ export default function Home() {
     }
   }
 
+  const handleClearHistory = async () => {
+    if (!window.confirm("Clear all your chat history? Conversation state will be reset.")) return
+    try {
+      await axios.delete(`${BACKEND_URL}/api/chat/history/${userId}`)
+      setMessages([])
+    } catch (err) {
+      setError("Failed to clear history")
+    }
+  }
+
+  const handleDeleteAllData = async () => {
+    if (!window.confirm("CRITICAL: Delete ALL your data? This includes chats and everything the agent has learned about you. This cannot be undone.")) return
+    try {
+      await axios.delete(`${BACKEND_URL}/api/user/data/${userId}`)
+      setMessages([])
+      alert("All user data has been wiped.")
+    } catch (err) {
+      setError("Failed to delete user data")
+    }
+  }
+
+  const handleNewChat = () => {
+    if (messages.length > 0 && !window.confirm("Start a new chat? This will clear the current screen (but your history is saved).")) return
+    setMessages([])
+    setShowDraft(false)
+    setDraftEmail('')
+  }
+
   if (!isLoggedIn) {
     return (
       <>
@@ -219,86 +257,122 @@ export default function Home() {
               {userName && <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Connected as {userName}</p>}
             </div>
           </div>
-          <button onClick={handleLogout} className="btn-secondary">Logout</button>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button onClick={handleClearHistory} className="btn-secondary" style={{ fontSize: '0.8rem' }}>Clear Chat</button>
+            <button onClick={handleDeleteAllData} className="btn-secondary" style={{ fontSize: '0.8rem', color: '#ef4444' }}>Wipe Data</button>
+            <button onClick={handleLogout} className="btn-secondary">Logout</button>
+          </div>
         </header>
 
-        <main className="messages-area glass-card">
-          {messages.length === 0 && (
-            <div style={{ textAlign: 'center', marginTop: '100px', opacity: 0.5 }}>
-              <div style={{ fontSize: '3rem', marginBottom: '16px' }}>👋</div>
-              <h3>How can I help you today?</h3>
-              <p style={{ marginTop: '8px' }}>Ask me about your emails, calendar, or to remember something.</p>
-            </div>
-          )}
-          {messages.map((msg, idx) => (
-            <div
-              key={idx}
-              className={`message-bubble ${msg.role === 'user' ? 'message-user' : 'message-agent'}`}
+        <div style={{ display: 'flex', flex: 1, gap: '20px', minHeight: 0 }}>
+          <aside className="glass-card" style={{ width: '280px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto' }}>
+            <button
+              onClick={handleNewChat}
+              className="btn-send"
+              style={{ width: '100%', padding: '12px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
             >
-              <div style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '4px', opacity: 0.8 }}>
-                {msg.role === 'user' ? 'YOU' : 'CORTEX'}
-              </div>
-              <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
-            </div>
-          ))}
-          {loading && (
-            <div className="typing-indicator">
-              <div className="dot"></div>
-              <div className="dot"></div>
-              <div className="dot"></div>
-            </div>
-          )}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              New Chat
+            </button>
 
-          {showDraft && !loading && (
-            <div className="draft-card animate-slide-up" style={{
-              border: '1px solid var(--primary)',
-              boxShadow: '0 0 20px rgba(139, 92, 246, 0.2)',
-              position: 'relative'
-            }}>
-              <div className="draft-header">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div className="pulse-dot"></div>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                    <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                  </svg>
-                  <span>Refining Email Draft...</span>
-                </div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  You can edit manually or ask me for changes below
-                </div>
-              </div>
-              <textarea
-                className="draft-textarea"
-                value={draftEmail}
-                onChange={(e) => setDraftEmail(e.target.value)}
-                placeholder="Draft content will appear here..."
-              />
-              <div className="draft-actions">
-                <button
-                  onClick={handleSendDraft}
-                  disabled={loading}
-                  className="btn-send"
-                  style={{ flex: 1, height: '48px', fontSize: '1rem' }}
-                >
-                  {loading ? (
-                    <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                      <div className="spinner"></div> Sending...
-                    </span>
-                  ) : 'Send Email Now'}
-                </button>
-                <button
-                  onClick={() => { setShowDraft(false); setDraftEmail(''); }}
-                  className="btn-secondary"
-                  style={{ padding: '0 24px' }}
-                >
-                  Discard
-                </button>
+            <div style={{ flex: 1 }}>
+              <h3 style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '12px' }}>Recent Messages</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {messages.length > 0 && messages.filter(m => m.role === 'user').slice(-8).reverse().map((m, idx) => (
+                  <div key={idx} className="history-item" onClick={() => setMessage(m.content)} title="Click to reuse message">
+                    {m.content}
+                  </div>
+                ))}
+                {messages.length === 0 && <p style={{ fontSize: '0.8rem', opacity: 0.5, textAlign: 'center', marginTop: '20px' }}>No history yet</p>}
               </div>
             </div>
-          )}
-          <div ref={messagesEndRef} />
-        </main>
+
+            <div style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              Tip: Your memory is shared across chats to provide a personalized experience.
+            </div>
+          </aside>
+
+          <main className="messages-area glass-card">
+            {messages.length === 0 && (
+              <div style={{ textAlign: 'center', marginTop: '100px', opacity: 0.5 }}>
+                <div style={{ fontSize: '3rem', marginBottom: '16px' }}>👋</div>
+                <h3>How can I help you today?</h3>
+                <p style={{ marginTop: '8px' }}>Ask me about your emails, calendar, or to remember something.</p>
+              </div>
+            )}
+            {messages.map((msg, idx) => (
+              <div
+                key={idx}
+                className={`message-bubble ${msg.role === 'user' ? 'message-user' : 'message-agent'}`}
+              >
+                <div style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '4px', opacity: 0.8 }}>
+                  {msg.role === 'user' ? 'YOU' : 'CORTEX'}
+                </div>
+                <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
+              </div>
+            ))}
+            {loading && (
+              <div className="typing-indicator">
+                <div className="dot"></div>
+                <div className="dot"></div>
+                <div className="dot"></div>
+              </div>
+            )}
+
+            {showDraft && !loading && (
+              <div className="draft-card animate-slide-up" style={{
+                border: '1px solid var(--primary)',
+                boxShadow: '0 0 20px rgba(139, 92, 246, 0.2)',
+                position: 'relative'
+              }}>
+                <div className="draft-header">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div className="pulse-dot"></div>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                    <span>Refining Email Draft...</span>
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    You can edit manually or ask me for changes below
+                  </div>
+                </div>
+                <textarea
+                  className="draft-textarea"
+                  value={draftEmail}
+                  onChange={(e) => setDraftEmail(e.target.value)}
+                  placeholder="Draft content will appear here..."
+                />
+                <div className="draft-actions">
+                  <button
+                    onClick={handleSendDraft}
+                    disabled={loading}
+                    className="btn-send"
+                    style={{ flex: 1, height: '48px', fontSize: '1rem' }}
+                  >
+                    {loading ? (
+                      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                        <div className="spinner"></div> Sending...
+                      </span>
+                    ) : 'Send Email Now'}
+                  </button>
+                  <button
+                    onClick={() => { setShowDraft(false); setDraftEmail(''); }}
+                    className="btn-secondary"
+                    style={{ padding: '0 24px' }}
+                  >
+                    Discard
+                  </button>
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </main>
+        </div>
 
         {error && (
           <div style={{ margin: '12px 0', padding: '12px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '12px', color: '#ef4444', fontSize: '0.9rem', textAlign: 'center' }}>

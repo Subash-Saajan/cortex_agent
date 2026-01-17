@@ -15,7 +15,7 @@ import os
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 
-MAX_CONVERSATION_LENGTH = 10
+MAX_CONVERSATION_LENGTH = 100
 
 conversation_histories = {}
 
@@ -63,7 +63,22 @@ async def chat(request: Request, chat_request: ChatRequest, db: AsyncSession = D
     message = chat_request.message
 
     if user_id not in conversation_histories:
-        conversation_histories[user_id] = deque(maxlen=MAX_CONVERSATION_LENGTH)
+        # Try to load from DB if not in memory
+        from sqlalchemy import select
+        try:
+            user_uuid = uuid.UUID(user_id)
+        except ValueError:
+            user_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, user_id)
+        
+        stmt = select(ChatMessage).where(ChatMessage.user_id == user_uuid).order_by(ChatMessage.created_at.desc()).limit(20)
+        result = await db.execute(stmt)
+        db_messages = result.scalars().all()
+        
+        history = deque(maxlen=MAX_CONVERSATION_LENGTH)
+        # Reverse because we want oldest first for deque
+        for msg in reversed(db_messages):
+            history.append({"role": msg.role, "content": msg.content})
+        conversation_histories[user_id] = history
 
     conversation_histories[user_id].append({"role": "user", "content": message})
 
@@ -134,3 +149,62 @@ async def get_chat_history(request: Request, user_id: str, db: AsyncSession = De
         MessageHistory(role=msg.role, content=msg.content)
         for msg in messages
     ]
+
+@router.delete("/chat/history/{user_id}")
+async def clear_chat_history(user_id: str, db: AsyncSession = Depends(get_db)):
+    """Clear chat history for user"""
+    from sqlalchemy import delete
+    
+    try:
+        user_uuid = uuid.UUID(user_id)
+    except ValueError:
+        user_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, user_id)
+
+    # Delete from DB
+    stmt = delete(ChatMessage).where(ChatMessage.user_id == user_uuid)
+    await db.execute(stmt)
+    await db.commit()
+
+    # Clear from memory
+    if user_id in conversation_histories:
+        conversation_histories[user_id].clear()
+
+    return {"status": "success", "message": "Chat history cleared"}
+
+@router.delete("/user/data/{user_id}")
+async def delete_all_user_data(user_id: str, db: AsyncSession = Depends(get_db)):
+    """Delete all data for user (Chat + Memory)"""
+    from sqlalchemy import delete
+    from ..db.models import MemoryFact, MemoryEmbedding
+    
+    try:
+        user_uuid = uuid.UUID(user_id)
+    except ValueError:
+        user_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, user_id)
+
+    # 1. Delete Chat Messages
+    stmt1 = delete(ChatMessage).where(ChatMessage.user_id == user_uuid)
+    await db.execute(stmt1)
+
+    # 2. Delete Memory Embeddings (linked to facts)
+    # We first find fact IDs for this user
+    from sqlalchemy import select
+    fact_ids_stmt = select(MemoryFact.id).where(MemoryFact.user_id == user_uuid)
+    fact_ids_result = await db.execute(fact_ids_stmt)
+    fact_ids = fact_ids_result.scalars().all()
+
+    if fact_ids:
+        stmt2 = delete(MemoryEmbedding).where(MemoryEmbedding.memory_fact_id.in_(fact_ids))
+        await db.execute(stmt2)
+
+    # 3. Delete Memory Facts
+    stmt3 = delete(MemoryFact).where(MemoryFact.user_id == user_uuid)
+    await db.execute(stmt3)
+
+    await db.commit()
+
+    # Clear from memory
+    if user_id in conversation_histories:
+        conversation_histories[user_id].clear()
+
+    return {"status": "success", "message": "All user data deleted"}
