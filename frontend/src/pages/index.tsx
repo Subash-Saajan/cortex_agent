@@ -85,8 +85,7 @@ export default function Home() {
     setMessages(prev => [...prev, { role: 'user', content: userMessage }])
     setLoading(true)
     setError('')
-    setShowDraft(false)
-    setDraftEmail('')
+    // Don't clear draft automatically, let the AI response decide if it's still a draft context
 
     try {
       const response = await axios.post(`${BACKEND_URL}/api/chat`, {
@@ -97,15 +96,19 @@ export default function Home() {
       const responseText = response.data.response
 
       // Check if response contains a draft email format
+      // If it does, update the draft and keep showing the draft UI
       if (responseText.includes('Subject:') && (responseText.includes('Body:') || responseText.length > 50)) {
         setDraftEmail(responseText)
         setShowDraft(true)
         setMessages(prev => [...prev, {
           role: 'assistant',
-          content: "I've drafted that email for you. You can review and edit it below.",
+          content: "I've updated the draft based on your request. You can review it below.",
           draft: true
         }])
       } else {
+        // If it's not a draft, hide the draft UI as the conversation moved on
+        setShowDraft(false)
+        setDraftEmail('')
         setMessages(prev => [...prev, { role: 'assistant', content: responseText }])
       }
     } catch (err: any) {
@@ -124,16 +127,26 @@ export default function Home() {
       setLoading(true)
 
       // Extract data from draft
-      const toMatch = draftEmail.match(/To:\s*([^\n]+)/i) || draftEmail.match(/to\s+([^\s]+@[^\s]+)/i)
+      const toMatch = draftEmail.match(/To:\s*([^\n]+)/i)
       const subMatch = draftEmail.match(/Subject:\s*([^\n]+)/i)
+      const bodyMatch = draftEmail.split(/Body:\s*/i)[1]
 
-      const to = toMatch ? toMatch[1].trim() : 'recipient@example.com'
+      const to = toMatch ? toMatch[1].trim() : (draftEmail.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/)?.[0] || 'recipient@example.com')
       const subject = subMatch ? subMatch[1].trim() : 'No Subject'
-      const body = draftEmail
+
+      let body = bodyMatch ? bodyMatch.trim() : draftEmail
         .replace(/To:.+/i, '')
         .replace(/Subject:.+/i, '')
         .replace(/Body:.+/i, '')
         .trim()
+
+      // If body is still empty or just contain labels, use the whole thing but strip labels
+      if (body.length < 10) {
+        body = draftEmail
+          .replace(/To:\s*[^\n]+/i, '')
+          .replace(/Subject:\s*[^\n]+/i, '')
+          .trim()
+      }
 
       await axios.post(`${BACKEND_URL}/api/gmail/send`, {
         user_id: userId,
@@ -246,34 +259,50 @@ export default function Home() {
             </div>
           )}
 
-          {showDraft && (
-            <div className="draft-card">
+          {showDraft && !loading && (
+            <div className="draft-card animate-slide-up" style={{
+              border: '1px solid var(--primary)',
+              boxShadow: '0 0 20px rgba(139, 92, 246, 0.2)',
+              position: 'relative'
+            }}>
               <div className="draft-header">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                  <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                </svg>
-                Email Draft
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div className="pulse-dot"></div>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                  <span>Refining Email Draft...</span>
+                </div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  You can edit manually or ask me for changes below
+                </div>
               </div>
               <textarea
                 className="draft-textarea"
                 value={draftEmail}
                 onChange={(e) => setDraftEmail(e.target.value)}
+                placeholder="Draft content will appear here..."
               />
               <div className="draft-actions">
                 <button
                   onClick={handleSendDraft}
                   disabled={loading}
-                  className="btn-primary"
-                  style={{ flex: 1 }}
+                  className="btn-send"
+                  style={{ flex: 1, height: '48px', fontSize: '1rem' }}
                 >
-                  {loading ? 'Sending...' : 'Send Message'}
+                  {loading ? (
+                    <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                      <div className="spinner"></div> Sending...
+                    </span>
+                  ) : 'Send Email Now'}
                 </button>
                 <button
                   onClick={() => { setShowDraft(false); setDraftEmail(''); }}
                   className="btn-secondary"
+                  style={{ padding: '0 24px' }}
                 >
-                  Cancel
+                  Discard
                 </button>
               </div>
             </div>
