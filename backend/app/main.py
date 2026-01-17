@@ -52,7 +52,9 @@ async def lifespan(app: FastAPI):
         # 6. User setup details migration
         try:
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_setup_complete INTEGER DEFAULT 0"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(255)"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS job_title VARCHAR(255)"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS personalization TEXT"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS main_goal TEXT"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS work_hours VARCHAR(255)"))
             logger.info("Checked user setup columns")

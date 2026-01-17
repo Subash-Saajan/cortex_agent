@@ -255,10 +255,15 @@ async def delete_all_user_data(user_id: str, db: AsyncSession = Depends(get_db))
     stmt_conv = delete(Conversation).where(Conversation.user_id == user_uuid)
     await db.execute(stmt_conv)
 
-    # 3. Delete Memory Embeddings (linked to facts)
-    # We first find fact IDs for this user
-    from sqlalchemy import select
-    fact_ids_stmt = select(MemoryFact.id).where(MemoryFact.user_id == user_uuid)
+    # 3. Delete Memory Embeddings (linked to facts being deleted)
+    # We exclude personal profile and preference facts from deletion
+    from sqlalchemy import select, and_, not_
+    fact_ids_stmt = select(MemoryFact.id).where(
+        and_(
+            MemoryFact.user_id == user_uuid,
+            not_(MemoryFact.category.in_(["personal", "preference"]))
+        )
+    )
     fact_ids_result = await db.execute(fact_ids_stmt)
     fact_ids = fact_ids_result.scalars().all()
 
@@ -266,8 +271,13 @@ async def delete_all_user_data(user_id: str, db: AsyncSession = Depends(get_db))
         stmt2 = delete(MemoryEmbedding).where(MemoryEmbedding.memory_fact_id.in_(fact_ids))
         await db.execute(stmt2)
 
-    # 4. Delete Memory Facts
-    stmt3 = delete(MemoryFact).where(MemoryFact.user_id == user_uuid)
+    # 4. Delete Memory Facts (excluding profile facts)
+    stmt3 = delete(MemoryFact).where(
+        and_(
+            MemoryFact.user_id == user_uuid,
+            not_(MemoryFact.category.in_(["personal", "preference"]))
+        )
+    )
     await db.execute(stmt3)
 
     await db.commit()

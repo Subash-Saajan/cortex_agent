@@ -95,7 +95,7 @@ export default function Home() {
                 work_hours: data.work_hours || '',
                 personalization: data.personalization || ''
               })
-              if (!data.name && data.name !== userName) setUserName(data.name)
+              if (data.name && data.name !== userName) setUserName(data.name)
             }
           })
           .catch(() => { })
@@ -144,6 +144,7 @@ export default function Home() {
   const handleLogout = () => {
     localStorage.removeItem('token')
     localStorage.removeItem('userId')
+    localStorage.removeItem('isSetupComplete')
     setIsLoggedIn(false)
     setUserId('')
     setMessages([])
