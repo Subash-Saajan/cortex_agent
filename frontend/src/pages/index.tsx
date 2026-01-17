@@ -13,7 +13,15 @@ export default function Home() {
   const [message, setMessage] = useState('')
   const [messages, setMessages] = useState<Array<{ role: string; content: string, draft?: boolean }>>([])
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  // Auto-clear error after 5 seconds
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(null), 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [error])
   const [draftEmail, setDraftEmail] = useState('')
   const [showDraft, setShowDraft] = useState(false)
   const [userEmail, setUserEmail] = useState('')
@@ -175,27 +183,41 @@ export default function Home() {
       setLoading(true)
 
       // Extract data from draft
-      const toMatch = draftEmail.match(/To:\s*([^\n]+)/i) || draftEmail.match(/to\s+([^\s]+@[^\s]+)/i)
-      const subMatch = draftEmail.match(/Subject:\s*([^\n]+)/i)
+      const toMatch = draftEmail.match(/To:\s*([^\n\r]+)/i)
+      const subjectMatch = draftEmail.match(/Subject:\s*([^\n\r]+)/i)
 
-      const to = toMatch ? toMatch[1].trim() : 'recipient@example.com'
-      const subject = subMatch ? subMatch[1].trim() : 'No Subject'
-      const body = draftEmail
-        .replace(/To:.+/i, '')
-        .replace(/Subject:.+/i, '')
-        .replace(/Body:.+/i, '')
-        .trim()
+      // Improved body extraction: everything after "Body:" or the first two matches
+      const bodyMatch = draftEmail.match(/Body:\s*([\s\S]+)/i)
+      const rawTo = toMatch ? toMatch[1].trim() : ''
+
+      // Extract just the email address from potential "Name <email@xxx.com>" format
+      const emailOnlyMatch = rawTo.match(/[\w\.-]+@[\w\.-]+\.\w+/)
+      const recipient = emailOnlyMatch ? emailOnlyMatch[0] : rawTo
+
+      const subject = subjectMatch ? subjectMatch[1].trim() : 'Email from Cortex'
+      let body = ''
+
+      if (bodyMatch) {
+        body = bodyMatch[1].trim()
+      } else {
+        // Fallback: strip headers if Body: label is missing
+        body = draftEmail
+          .replace(/To:.+/i, '')
+          .replace(/Subject:.+/i, '')
+          .replace(/Body:.+/i, '')
+          .trim()
+      }
 
       await axios.post(`${BACKEND_URL}/api/gmail/send`, {
         user_id: userId,
-        to: to,
+        to: recipient,
         subject: subject,
         body: body
       })
 
       setShowDraft(false)
       setDraftEmail('')
-      setMessages(prev => [...prev, { role: 'assistant', content: `Success! I've sent the email to ${to}.` }])
+      setMessages(prev => [...prev, { role: 'assistant', content: `Success! I've sent the email to ${recipient}.` }])
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to send email. Check your connection.')
     } finally {
@@ -429,8 +451,11 @@ export default function Home() {
         </div>
 
         {error && (
-          <div style={{ margin: '12px 0', padding: '12px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '12px', color: '#ef4444', fontSize: '0.9rem', textAlign: 'center' }}>
-            {error}
+          <div className="toast-container">
+            <div className="toast">
+              <div className="toast-icon">!</div>
+              <div>{error}</div>
+            </div>
           </div>
         )}
 

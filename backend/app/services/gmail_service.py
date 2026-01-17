@@ -96,11 +96,16 @@ class GmailService:
     async def send_email(user_id: str, to: str, subject: str, body: str, db: AsyncSession, thread_id: str = None) -> str:
         """Send an email, supporting threading"""
         try:
+            import re
             from email.mime.text import MIMEText
             service = await GmailService.get_service(user_id, db)
 
+            # Robust email extraction: extract subash@example.com from "Subash <subash@example.com>"
+            email_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', to)
+            clean_to = email_match.group(0) if email_match else to.strip()
+
             message = MIMEText(body)
-            message["to"] = to
+            message["to"] = clean_to
             message["subject"] = subject
 
             # If replying, set proper headers
