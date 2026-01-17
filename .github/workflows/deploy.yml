@@ -1,11 +1,12 @@
-name: Deploy Backend
+name: Build and Deploy
 
 on:
   push:
     branches: [main, master]
     paths:
       - 'backend/**'
-      - '.github/workflows/deploy-backend.yml'
+      - 'frontend/**'
+      - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
 env:
@@ -14,9 +15,30 @@ env:
   ECR_BACKEND_REPO: cortex-agent-backend
   ECS_CLUSTER: cortex-agent-cluster
   ECS_SERVICE: cortex-agent-service
+  S3_BUCKET: cortex-agent-frontend-045230654519
+  CLOUDFRONT_DIST_ID: E3542HOBM2OPAR
 
 jobs:
-  deploy:
+  # This job detects which files changed
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+            frontend:
+              - 'frontend/**'
+
+  deploy-backend:
+    needs: changes
+    if: ${{ needs.changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -33,7 +55,7 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build, tag, and push backend image to ECR
+      - name: Build, tag, and push backend image
         id: build-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -71,3 +93,34 @@ jobs:
           service: ${{ env.ECS_SERVICE }}
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
+
+  deploy-frontend:
+    needs: changes
+    if: ${{ needs.changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build frontend
+        env:
+          NEXT_PUBLIC_BACKEND_URL: ${{ secrets.FRONTEND_BACKEND_URL }}
+        run: |
+          cd frontend
+          npm install
+          npm run build
+
+      - name: Deploy to S3
+        run: |
+          aws s3 sync ./frontend/out/ s3://${{ env.S3_BUCKET }}/ --delete --cache-control "max-age=31536000"
+
+      - name: Invalidate CloudFront
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${{ env.CLOUDFRONT_DIST_ID }} --paths "/*"
