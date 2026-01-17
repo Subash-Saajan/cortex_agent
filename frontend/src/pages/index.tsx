@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
 import { useRouter } from 'next/router'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
 
@@ -359,7 +361,11 @@ export default function Home() {
                 <div style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '4px', opacity: 0.8 }}>
                   {msg.role === 'user' ? 'YOU' : 'CORTEX'}
                 </div>
-                <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
+                <div className="markdown-content">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {msg.content}
+                  </ReactMarkdown>
+                </div>
               </div>
             ))}
             {loading && (

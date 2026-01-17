@@ -380,3 +380,36 @@ h4 {
     border-color: rgba(139, 92, 246, 0.3);
     font-weight: 600;
 }
+
+/* Markdown Styles */
+.markdown-content p {
+    margin-bottom: 8px;
+}
+
+.markdown-content p:last-child {
+    margin-bottom: 0;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+    margin-left: 20px;
+    margin-bottom: 12px;
+}
+
+.markdown-content li {
+    margin-bottom: 4px;
+}
+
+.markdown-content strong {
+    color: white;
+    font-weight: 700;
+}
+
+.markdown-content a {
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.markdown-content a:hover {
+    text-decoration: underline;
+}
