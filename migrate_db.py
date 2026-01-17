@@ -20,6 +20,13 @@ async def migrate():
     async with engine.begin() as conn:
         print("Checking for missing columns...")
         
+        # Add personalization to users if it doesn't exist
+        try:
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS personalization TEXT"))
+            print("Ensured personalization exists in users")
+        except Exception as e:
+            print(f"Error adding personalization: {e}")
+
         # Add metadata_json to memory_facts if it doesn't exist
         try:
             await conn.execute(text("ALTER TABLE memory_facts ADD COLUMN IF NOT EXISTS metadata_json TEXT"))

@@ -39,7 +39,16 @@ class TokenResponse(BaseModel):
 
 class SetupRequest(BaseModel):
     user_id: str
+    name: str
     job_title: str
+    main_goal: str
+    work_hours: str
+    personalization: str = ""
+
+class ProfileUpdate(BaseModel):
+    name: str
+    job_title: str
+    personalization: str
     main_goal: str
     work_hours: str
 
@@ -210,7 +219,7 @@ async def verify_token_endpoint(token: str = Query(...)):
 
 @router.get("/user/{user_id}")
 async def get_user(user_id: str, db: AsyncSession = Depends(get_db)):
-    """Get user info by user_id"""
+    """Get user info and profile by user_id"""
     try:
         stmt = select(User).where(User.id == uuid.UUID(user_id))
         result = await db.execute(stmt)
@@ -223,7 +232,11 @@ async def get_user(user_id: str, db: AsyncSession = Depends(get_db)):
             "id": str(user.id),
             "email": user.email,
             "name": user.name,
-            "is_setup_complete": bool(user.is_setup_complete)
+            "is_setup_complete": bool(user.is_setup_complete),
+            "job_title": user.job_title,
+            "personalization": user.personalization,
+            "main_goal": user.main_goal,
+            "work_hours": user.work_hours
         }
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid user_id format")
@@ -239,21 +252,60 @@ async def setup_user(req: SetupRequest, db: AsyncSession = Depends(get_db)):
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
             
+        user.name = req.name
         user.job_title = req.job_title
         user.main_goal = req.main_goal
         user.work_hours = req.work_hours
+        user.personalization = req.personalization
         user.is_setup_complete = 1
         
         # Also save this to memory for the AI
         from ..services.memory_service import MemoryService
         await MemoryService.store_fact(
             str(user.id), 
-            f"User Profile: I am a {req.job_title}. My main goal is {req.main_goal}. I typically work {req.work_hours}.", 
+            f"User Profile: My name is {req.name}. I am a {req.job_title}. My main goal is {req.main_goal}. I typically work {req.work_hours}. My AI personalization preference: {req.personalization}", 
             category="personal",
+            importance=1.0,
             db=db
         )
         
         await db.commit()
         return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/profile/{user_id}")
+async def update_profile(user_id: str, req: ProfileUpdate, db: AsyncSession = Depends(get_db)):
+    """Update user profile info"""
+    try:
+        stmt = select(User).where(User.id == uuid.UUID(user_id))
+        result = await db.execute(stmt)
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+            
+        user.name = req.name
+        user.job_title = req.job_title
+        user.personalization = req.personalization
+        user.main_goal = req.main_goal
+        user.work_hours = req.work_hours
+        
+        # Update memory fact about profile
+        from ..services.memory_service import MemoryService
+        await MemoryService.store_fact(
+            str(user.id), 
+            f"Updated User Profile: My name is {req.name}. I am a {req.job_title}. My main AI personalization: {req.personalization}", 
+            category="preference",
+            importance=1.0,
+            db=db
+        )
+        
+        await db.commit()
+        return {"status": "success", "user": {
+            "name": user.name,
+            "job_title": user.job_title,
+            "personalization": user.personalization
+        }}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

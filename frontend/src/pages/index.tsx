@@ -34,7 +34,9 @@ export default function Home() {
     const storedSetup = localStorage.getItem('isSetupComplete')
     if (storedSetup === '0') setIsSetupComplete(false)
   }, [])
-  const [setupData, setSetupData] = useState({ job_title: '', main_goal: '', work_hours: '' })
+  const [setupData, setSetupData] = useState({ name: '', job_title: '', main_goal: '', work_hours: '', personalization: '' })
+  const [showProfile, setShowProfile] = useState(false)
+  const [profileData, setProfileData] = useState({ name: '', job_title: '', main_goal: '', work_hours: '', personalization: '' })
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -85,6 +87,15 @@ export default function Home() {
             if (data.is_setup_complete !== undefined) {
               setIsSetupComplete(data.is_setup_complete)
               localStorage.setItem('isSetupComplete', data.is_setup_complete ? '1' : '0')
+              // Initialize profile data
+              setProfileData({
+                name: data.name || '',
+                job_title: data.job_title || '',
+                main_goal: data.main_goal || '',
+                work_hours: data.work_hours || '',
+                personalization: data.personalization || ''
+              })
+              if (!data.name && data.name !== userName) setUserName(data.name)
             }
           })
           .catch(() => { })
@@ -139,8 +150,8 @@ export default function Home() {
   }
 
   const handleUpdateSetup = async () => {
-    if (!setupData.job_title || !setupData.main_goal || !setupData.work_hours) {
-      setError('Please fill in all details to proceed.')
+    if (!setupData.name || !setupData.job_title || !setupData.main_goal) {
+      setError('Please fill in your name, position and main goal to proceed.')
       return
     }
     setLoading(true)
@@ -151,10 +162,27 @@ export default function Home() {
       })
       setIsSetupComplete(true)
       localStorage.setItem('isSetupComplete', '1')
+      setUserName(setupData.name)
+      // Refresh profile data
+      setProfileData({ ...setupData })
       // Refresh chat or show welcome message
-      setMessages([{ role: 'assistant', content: `Welcome aboard, ${userName}! I've noted that you're a ${setupData.job_title} and your main goal is ${setupData.main_goal}. How can I assist you with your emails or calendar today?` }])
+      setMessages([{ role: 'assistant', content: `Welcome aboard, ${setupData.name}! I've noted that you're a ${setupData.job_title} and your main goal is ${setupData.main_goal}. How can I assist you with your emails or calendar today?` }])
     } catch (err) {
       setError('Failed to save setup details. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleUpdateProfile = async () => {
+    setLoading(true)
+    try {
+      const res = await axios.post(`${BACKEND_URL}/api/auth/profile/${userId}`, profileData)
+      setUserName(profileData.name)
+      setShowProfile(false)
+      alert("Profile updated successfully!")
+    } catch (err) {
+      setError('Failed to update profile.')
     } finally {
       setLoading(false)
     }
@@ -373,38 +401,46 @@ export default function Home() {
         <div className="bg-mesh" />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '20px', position: 'relative', zIndex: 10 }}>
           <div className="glass-card onboarding-card animate-slide-up">
-            <h2 style={{ fontSize: '2rem', marginBottom: '8px' }}>Welcome, {userName || 'Chief'}! 🥂</h2>
+            <h2 style={{ fontSize: '2rem', marginBottom: '8px' }}>Welcome! 🥂</h2>
             <p style={{ color: 'var(--text-muted)', marginBottom: '32px' }}>Let's personalize your experience. These details help Cortex serve you better.</p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
               <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>What is your job title or primary role?</label>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>What is your name?</label>
                 <input
+                  className="input-field"
+                  value={setupData.name}
+                  onChange={e => setSetupData({ ...setupData, name: e.target.value })}
+                  placeholder="e.g. John Doe"
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>What is your current position?</label>
+                <select
                   className="input-field"
                   value={setupData.job_title}
                   onChange={e => setSetupData({ ...setupData, job_title: e.target.value })}
-                  placeholder="e.g. Founder, Software Engineer, Student"
-                />
+                  style={{ background: 'var(--card-bg)', cursor: 'pointer' }}
+                >
+                  <option value="">Select a position...</option>
+                  <option value="Student">Student</option>
+                  <option value="Employee">Employee</option>
+                  <option value="Business Owner">Business Owner</option>
+                  <option value="Freelancer">Freelancer</option>
+                  <option value="Researcher">Researcher</option>
+                  <option value="Other">Other</option>
+                </select>
               </div>
 
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>What is your main goal for using Cortex?</label>
                 <textarea
                   className="input-field"
-                  style={{ minHeight: '100px', padding: '12px', resize: 'none' }}
+                  style={{ minHeight: '80px', padding: '12px', resize: 'none' }}
                   value={setupData.main_goal}
                   onChange={e => setSetupData({ ...setupData, main_goal: e.target.value })}
                   placeholder="e.g. Organize my chaotic inbox and stay ahead of calendar invites."
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>What are your typical work hours?</label>
-                <input
-                  className="input-field"
-                  value={setupData.work_hours}
-                  onChange={e => setSetupData({ ...setupData, work_hours: e.target.value })}
-                  placeholder="e.g. 10 AM to 6 PM IST"
                 />
               </div>
 
@@ -438,6 +474,7 @@ export default function Home() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: '10px' }}>
+            <button onClick={() => setShowProfile(true)} className="btn-secondary" style={{ fontSize: '0.8rem' }}>Profile</button>
             <button onClick={handleClearHistory} className="btn-secondary" style={{ fontSize: '0.8rem' }}>Clear Chat</button>
             <button onClick={handleDeleteAllData} className="btn-secondary" style={{ fontSize: '0.8rem', color: '#ef4444' }}>Wipe Data</button>
             <button onClick={handleLogout} className="btn-secondary">Logout</button>
@@ -636,9 +673,113 @@ export default function Home() {
         </footer>
       </div>
 
+      {showProfile && (
+        <div className="modal-overlay" onClick={() => setShowProfile(false)}>
+          <div className="glass-card profile-modal animate-slide-up" onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '1.5rem' }}>User Profile</h2>
+              <button onClick={() => setShowProfile(false)} className="btn-secondary" style={{ padding: '8px 12px' }}>✕</button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div>
+                <label className="label">Full Name</label>
+                <input
+                  className="input-field"
+                  value={profileData.name}
+                  onChange={e => setProfileData({ ...profileData, name: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="label">Position</label>
+                <select
+                  className="input-field"
+                  value={profileData.job_title}
+                  onChange={e => setProfileData({ ...profileData, job_title: e.target.value })}
+                  style={{ background: 'var(--card-bg)' }}
+                >
+                  <option value="Student">Student</option>
+                  <option value="Employee">Employee</option>
+                  <option value="Business Owner">Business Owner</option>
+                  <option value="Freelancer">Freelancer</option>
+                  <option value="Researcher">Researcher</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="label">Personalize your AI</label>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '8px' }}>E.g. "My emails must be straight to the point. short." or "Be very polite and formal."</p>
+                <textarea
+                  className="input-field"
+                  style={{ minHeight: '80px', resize: 'none' }}
+                  value={profileData.personalization}
+                  onChange={e => setProfileData({ ...profileData, personalization: e.target.value })}
+                  placeholder="How should I communicate?"
+                />
+              </div>
+
+              <div>
+                <label className="label">Main Goal</label>
+                <input
+                  className="input-field"
+                  value={profileData.main_goal}
+                  onChange={e => setProfileData({ ...profileData, main_goal: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="label">Work Hours</label>
+                <input
+                  className="input-field"
+                  value={profileData.work_hours}
+                  onChange={e => setProfileData({ ...profileData, work_hours: e.target.value })}
+                />
+              </div>
+
+              <button
+                className="btn-send"
+                onClick={handleUpdateProfile}
+                disabled={loading}
+                style={{ marginTop: '12px' }}
+              >
+                {loading ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style jsx global>{`
         body {
           overflow: hidden;
+        }
+        .modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0,0,0,0.6);
+          backdrop-filter: blur(8px);
+          z-index: 1000;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 20px;
+        }
+        .profile-modal {
+          max-width: 500px;
+          width: 100%;
+          padding: 32px;
+          border: 1px solid rgba(255,255,255,0.1);
+        }
+        .label {
+          display: block;
+          margin-bottom: 8px;
+          font-weight: 500;
+          font-size: 0.9rem;
         }
       `}</style>
     </>
