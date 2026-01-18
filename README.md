@@ -1,173 +1,99 @@
-# Cortex Agent - Personal AI Assistant
+# 🧠 Cortex AI: Your Agentic Chief of Staff
 
-A personal agentic AI assistant that integrates with Google Workspace (Gmail & Calendar) and uses Claude for intelligent decision-making.
+[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Next.js](https://img.shields.io/badge/Frontend-Next.js-000000?style=flat-square&logo=next.js&logoColor=white)](https://nextjs.org/)
+[![LangGraph](https://img.shields.io/badge/Agent-LangGraph-orange?style=flat-square)](https://github.com/langchain-ai/langgraph)
+[![AWS](https://img.shields.io/badge/Infrastructure-AWS-232F3E?style=flat-square&logo=amazon-aws&logoColor=white)](https://aws.amazon.com/)
+[![Gemini](https://img.shields.io/badge/AI-Gemini_2.0_Flash-blue?style=flat-square)](https://ai.google.dev/)
 
-## Project Structure
+**Cortex** is a high-performance, agentic personal assistant designed to manage your professional and personal life autonomously. Deeply integrated with Google Workspace, it doesn't just "chat"—it executes workflows, manages schedules, and maintains a long-term semantic memory of your preferences.
 
-```
-CortexAgent/
-├── backend/               # FastAPI backend with LangGraph agent
-├── frontend/              # Next.js frontend
-├── terraform/             # AWS infrastructure as code
-├── docker-compose.yml     # Local development setup
-└── README.md
-```
+---
 
-## Prerequisites
+## ✨ Key Features
 
-- Docker & Docker Compose
-- Terraform
-- Node.js 18+
-- Python 3.11+
-- AWS Account
+- **🛡️ Agentic Reasoning**: Powered by **LangGraph** and **Gemini 2.0 Flash**, the agent performs complex multi-step reasoning before acting.
+- **📅 Workspace Mastery**: Native integration with **Gmail** and **Google Calendar**. Extract PDF data, manage threads, and schedule meetings relative to "next Tuesday".
+- **🧠 Semantic Long-Term Memory**: Uses **pgvector** to remember facts, preferences, and projects across conversations.
+- **🎨 Glassmorphism UI**: A premium, responsive interface featuring dynamic mesh backgrounds and real-time interaction states.
+- **👤 User Profiles & Personalization**: Tailor the AI's communication style (e.g., "concise and technical" vs. "formal and polite").
+- **✅ Safety First**: Mandatory "Human-in-the-loop" approval for emails and calendar event creation.
 
-## Local Development
+---
 
-### 1. Clone and Setup
+## 🏗️ Architecture Overview
 
-```bash
-git clone https://github.com/Subash-Saajan/cortex_agent.git
-cd cortex_agent
-```
+Cortex is built on a **ReAct (Reason + Act)** pattern. Instead of a linear flow, the agent operates in a graph-based cycle:
 
-### 2. Configure Environment Variables
+1.  **Ingest**: Receive user query + dynamic context (Time, Location).
+2.  **Retrieve**: Semantic search via `pgvector` for relevant long-term memories.
+3.  **Reason**: LLM decides if a tool (Gmail/Calendar) is needed.
+4.  **Act**: Execute tool and observe result.
+5.  **Refine**: Update status and respond to user.
 
-```bash
-# Backend
-cp backend/.env.example backend/.env
-# Edit backend/.env with your actual values
+---
 
-# Frontend
-cp frontend/.env.example frontend/.env
-```
+## 🛠️ Technical Stack
 
-### 3. Start Local Services
+### **Backend**
+- **Core**: FastAPI (Asynchronous)
+- **AI Orchestration**: LangGraph (StateGraph)
+- **Database**: PostgreSQL with `pgvector`
+- **Integrations**: Google APIs (OAuth2, Gmail v1, Calendar v3)
 
-```bash
-docker-compose up --build
-```
+### **Frontend**
+- **Framework**: Next.js 14 (App Router)
+- **Styling**: Vanilla CSS (Custom Glassmorphism system)
+- **Real-time**: Axios-based polling and dynamic state management
 
-Services will be available at:
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- Database: localhost:5432
-
-## AWS Deployment
-
-### 1. Configure Terraform
-
-```bash
-cd terraform
-cp terraform.tfvars.example terraform.tfvars
-# Edit terraform.tfvars with your actual values
-```
-
-### 2. Deploy to AWS
-
-```bash
-# Initialize Terraform
-terraform init
-
-# Plan deployment
-terraform plan
-
-# Apply configuration
-terraform apply
-```
-
-### 3. Deploy Docker Images to ECR
-
-```bash
-# Build and push backend
-docker build -t cortex-agent-backend:latest ./backend
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com
-docker tag cortex-agent-backend:latest <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/cortex-agent-backend:latest
-docker push <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/cortex-agent-backend:latest
-
-# Build and push frontend
-docker build -t cortex-agent-frontend:latest ./frontend
-docker tag cortex-agent-frontend:latest <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/cortex-agent-frontend:latest
-docker push <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/cortex-agent-frontend:latest
-```
-
-## Tech Stack
-
-- **Frontend**: Next.js + React
-- **Backend**: FastAPI + LangGraph + Claude
-- **Database**: PostgreSQL + pgvector (vector embeddings)
-- **Infrastructure**: AWS (ECS Fargate, RDS, S3, CloudFront)
+### **Infrastructure**
+- **Cloud**: AWS (ECS Fargate, RDS PostgreSQL, ALB)
 - **IaC**: Terraform
 - **CI/CD**: GitHub Actions
 
-## Features (Roadmap)
+---
 
-- [ ] Day 1-2: "Hello World" chat on AWS
-- [ ] Day 3-4: Dynamic memory with PostgreSQL
-- [ ] Day 5-6: Google OAuth + Gmail/Calendar integration
-- [ ] Day 7-8: Production-ready frontend
-- [ ] Day 9: Testing & early submission
+## 🚀 Getting Started
 
-## Environment Variables
+### 1. Prerequisites
+- Docker & Docker Compose
+- Google Cloud Platform Project (with Gmail/Calendar APIs enabled)
+- Google API Key (for Gemini)
 
-### Backend (.env)
-
-```
-DATABASE_URL=postgresql://user:password@host:5432/cortexdb
-GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=xxx
-GOOGLE_REDIRECT_URI=https://your-cloudfront-domain/api/auth/callback
-CLAUDE_API_KEY=sk-xxx
-JWT_SECRET=your-secret-key
-BACKEND_URL=http://your-ecs-public-ip:8000
-```
-
-### Frontend (.env.local)
-
-```
-NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
-```
-
-## Testing
-
+### 2. Environment Setup
 ```bash
-# Run backend tests
-cd backend
-pytest
+# Clone the repository
+git clone https://github.com/Subash-Saajan/cortex_agent.git
+cd cortex_agent
 
-# Run frontend tests
-cd frontend
-npm test
+# Configure Backend
+cp backend/.env.example backend/.env
+# Update backend/.env with your Google Credentials & DB URL
+
+# Configure Frontend
+cp frontend/.env.example frontend/.env
 ```
 
-## Troubleshooting
+### 3. Local Deployment
+```bash
+docker-compose up --build
+```
+- Access Frontend: `http://localhost:3000`
+- Access Backend API: `http://localhost:8000`
 
-### Docker Compose Issues
-- Ensure ports 3000, 8000, 5432 are not in use
-- Clear volumes: `docker-compose down -v`
+---
 
-### Terraform Issues
-- Validate syntax: `terraform validate`
-- Format code: `terraform fmt`
-- Check state: `terraform state list`
+## 🔐 Security & Privacy
 
-### ECS Issues
-- Check logs: `aws logs tail /ecs/cortex-agent --follow`
-- Verify task: `aws ecs describe-tasks --cluster cortex-agent-cluster --tasks <task-arn>`
+- **Row-Level Isolation**: Users can only access their own messages, memories, and workspace data.
+- **Secure Auth**: Uses **Google OAuth 2.0** for identity and **JWT** for session management.
+- **Data Sovereignty**: Implemented "Right to be Forgotten" logic—users can wipe all chat/memory data while keeping their configuration.
 
-## Deployment to AWS
+---
 
-The infrastructure uses:
-- **ECS Fargate** with public IP (no ALB needed)
-- **RDS Aurora PostgreSQL** (db.t3.micro - free tier eligible)
-- **S3 + CloudFront** for frontend hosting
-- **ECR** for container registry
+## 📜 License
+This project is licensed under the MIT License - see the `LICENSE` file for details.
 
-Estimated monthly cost: $10-15
+---
 
-## Contributing
-
-Pull requests welcome. For major changes, please open an issue first to discuss.
-
-## License
-
-MIT
+*Built with ❤️ by Subash & The Cortex Team.*
