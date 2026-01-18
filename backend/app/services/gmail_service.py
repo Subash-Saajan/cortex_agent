@@ -40,8 +40,8 @@ class GmailService:
         return build("gmail", "v1", credentials=credentials)
 
     @staticmethod
-    async def get_inbox(user_id: str, db: AsyncSession, max_results: int = 10) -> List[dict]:
-        """Get recent emails from inbox"""
+    async def search_messages(user_id: str, db: AsyncSession, query: str = "in:inbox", max_results: int = 10) -> List[dict]:
+        """Search for messages using Gmail query syntax (e.g., 'in:inbox', 'from:someone', 'subject:something')"""
         try:
             service = await GmailService.get_service(user_id, db)
 
@@ -49,7 +49,7 @@ class GmailService:
             results = service.users().messages().list(
                 userId="me",
                 maxResults=max_results,
-                q="in:inbox"
+                q=query
             ).execute()
 
             messages = results.get("messages", [])
@@ -65,6 +65,7 @@ class GmailService:
                 headers = msg_data["payload"]["headers"]
                 subject = next((h["value"] for h in headers if h["name"] == "Subject"), "No Subject")
                 sender = next((h["value"] for h in headers if h["name"] == "From"), "Unknown")
+                receiver = next((h["value"] for h in headers if h["name"] == "To"), "Unknown")
                 date = next((h["value"] for h in headers if h["name"] == "Date"), "")
 
                 # Get email body
@@ -84,6 +85,7 @@ class GmailService:
                     "thread_id": msg["threadId"],
                     "subject": subject,
                     "from": sender,
+                    "to": receiver,
                     "date": date,
                     "preview": body[:300] + "..." if len(body) > 300 else body
                 })
@@ -91,7 +93,7 @@ class GmailService:
             return email_list
 
         except Exception as e:
-            raise ValueError(f"Error fetching inbox: {str(e)}")
+            raise ValueError(f"Error searching messages: {str(e)}")
 
     async def send_email(user_id: str, to: str, subject: str, body: str, db: AsyncSession, thread_id: str = None) -> str:
         """Send an email, supporting threading"""

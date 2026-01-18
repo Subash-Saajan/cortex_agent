@@ -78,8 +78,10 @@ If you need to perform an action (read email, check calendar, save memory), use 
 # --- Tools (Schema only for LLM) ---
 
 @tool
-def search_emails(query: str):
-    """Search for relevant emails in the user's inbox. Provides snippets and subjects."""
+def search_emails(query: str = "in:inbox"):
+    """Search for relevant emails in the user's Gmail. 
+    You can use standard Gmail search operators like 'in:inbox', 'in:sent', 'from:someone@example.com', 'subject:report', etc.
+    Default is 'in:inbox'. To see sent mail, use 'in:sent' or 'is:sent'."""
     pass
 
 @tool
@@ -143,12 +145,13 @@ async def execute_tools(state: AgentState):
         result = ""
         try:
             if tool_name == "search_emails":
-                emails = await GmailService.get_inbox(state["user_id"], state["db"], max_results=5)
+                search_query = args.get("query", "in:inbox")
+                emails = await GmailService.search_messages(state["user_id"], state["db"], query=search_query, max_results=5)
                 if not emails:
-                    result = "No emails found."
+                    result = f"No emails found matching query: {search_query}"
                 else:
-                    result = "RECENT EMAILS:\n" + "\n".join([
-                        f"- From: {e['from']}\n  Subject: {e['subject']}\n  Snippet: {e['preview']}\n  ThreadID: {e['thread_id']}" 
+                    result = f"EMAILS MATCHING '{search_query}':\n" + "\n".join([
+                        f"- From: {e['from']}\n  To: {e['to']}\n  Subject: {e['subject']}\n  Snippet: {e['preview']}\n  ThreadID: {e['thread_id']}" 
                         for e in emails
                     ])
             
