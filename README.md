@@ -12,12 +12,12 @@
 
 ##  Key Features
 
-- ** Agentic Reasoning**: Powered by **LangGraph** and **Gemini 2.0 Flash**, the agent performs complex multi-step reasoning before acting.
-- ** Workspace Mastery**: Native integration with **Gmail** and **Google Calendar**. Extract PDF data, manage threads, and schedule meetings relative to "next Tuesday".
-- ** Semantic Long-Term Memory**: Uses **pgvector** to remember facts, preferences, and projects across conversations.
-- ** Glassmorphism UI**: A premium, responsive interface featuring dynamic mesh backgrounds and real-time interaction states.
-- ** User Profiles & Personalization**: Tailor the AI's communication style (e.g., "concise and technical" vs. "formal and polite").
-- ** Safety First**: Mandatory "Human-in-the-loop" approval for emails and calendar event creation.
+- **Agentic Reasoning**: Powered by **LangGraph** and **Gemini 2.0 Flash**, the agent performs complex multi-step reasoning before acting.
+- **Workspace Mastery**: Native integration with **Gmail** and **Google Calendar**. Extract PDF data, manage threads, and schedule meetings relative to "next Tuesday".
+- **Semantic Long-Term Memory**: Uses **pgvector** to remember facts, preferences, and projects across conversations.
+- **Glassmorphism UI**: A premium, responsive interface featuring dynamic mesh backgrounds and real-time interaction states.
+- **User Profiles & Personalization**: Tailor the AI's communication style (e.g., "concise and technical" vs. "formal and polite").
+- **Safety First**: Mandatory "Human-in-the-loop" approval for emails and calendar event creation.
 
 ---
 
