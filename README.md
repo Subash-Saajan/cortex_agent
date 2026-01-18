@@ -1,4 +1,4 @@
-# 🧠 Cortex AI: Your Agentic Chief of Staff
+#  Cortex AI: Your Agentic Chief of Staff
 
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Next.js](https://img.shields.io/badge/Frontend-Next.js-000000?style=flat-square&logo=next.js&logoColor=white)](https://nextjs.org/)
@@ -10,18 +10,18 @@
 
 ---
 
-## ✨ Key Features
+##  Key Features
 
-- **🛡️ Agentic Reasoning**: Powered by **LangGraph** and **Gemini 2.0 Flash**, the agent performs complex multi-step reasoning before acting.
-- **📅 Workspace Mastery**: Native integration with **Gmail** and **Google Calendar**. Extract PDF data, manage threads, and schedule meetings relative to "next Tuesday".
-- **🧠 Semantic Long-Term Memory**: Uses **pgvector** to remember facts, preferences, and projects across conversations.
-- **🎨 Glassmorphism UI**: A premium, responsive interface featuring dynamic mesh backgrounds and real-time interaction states.
-- **👤 User Profiles & Personalization**: Tailor the AI's communication style (e.g., "concise and technical" vs. "formal and polite").
-- **✅ Safety First**: Mandatory "Human-in-the-loop" approval for emails and calendar event creation.
+- ** Agentic Reasoning**: Powered by **LangGraph** and **Gemini 2.0 Flash**, the agent performs complex multi-step reasoning before acting.
+- ** Workspace Mastery**: Native integration with **Gmail** and **Google Calendar**. Extract PDF data, manage threads, and schedule meetings relative to "next Tuesday".
+- ** Semantic Long-Term Memory**: Uses **pgvector** to remember facts, preferences, and projects across conversations.
+- ** Glassmorphism UI**: A premium, responsive interface featuring dynamic mesh backgrounds and real-time interaction states.
+- ** User Profiles & Personalization**: Tailor the AI's communication style (e.g., "concise and technical" vs. "formal and polite").
+- ** Safety First**: Mandatory "Human-in-the-loop" approval for emails and calendar event creation.
 
 ---
 
-## 🏗️ Architecture Overview
+##  Architecture Overview
 
 Cortex is built on a **ReAct (Reason + Act)** pattern. Instead of a linear flow, the agent operates in a graph-based cycle:
 
@@ -33,7 +33,7 @@ Cortex is built on a **ReAct (Reason + Act)** pattern. Instead of a linear flow,
 
 ---
 
-## 🛠️ Technical Stack
+##  Technical Stack
 
 ### **Backend**
 - **Core**: FastAPI (Asynchronous)
@@ -53,7 +53,7 @@ Cortex is built on a **ReAct (Reason + Act)** pattern. Instead of a linear flow,
 
 ---
 
-## 🚀 Getting Started
+##  Getting Started
 
 ### 1. Prerequisites
 - Docker & Docker Compose
@@ -83,7 +83,7 @@ docker-compose up --build
 
 ---
 
-## 🔐 Security & Privacy
+##  Security & Privacy
 
 - **Row-Level Isolation**: Users can only access their own messages, memories, and workspace data.
 - **Secure Auth**: Uses **Google OAuth 2.0** for identity and **JWT** for session management.
@@ -91,9 +91,9 @@ docker-compose up --build
 
 ---
 
-## 📜 License
+##  License
 This project is licensed under the MIT License - see the `LICENSE` file for details.
 
 ---
 
-*Built with ❤️ by Subash & The Cortex Team.*
+*Built by Subash.*
